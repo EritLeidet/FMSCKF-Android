@@ -1,4 +1,6 @@
 package com.android.msckfs;
+import static com.android.msckfs.utils.MathUtils.deleteColumns;
+import static com.android.msckfs.utils.MathUtils.deletedRows;
 import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
 import static com.android.msckfs.utils.MathUtils.quaternionToVector;
 import static com.android.msckfs.utils.MathUtils.rotationToQuaternion;
@@ -254,13 +256,38 @@ public abstract class MsckfAbstract implements Msckf {
 
         msckf_update(); // TODO
 
-        // TODO: ..
+        // Remove the camera states from the state vector
+        int camStateStart = 15;
+        int camStateEnd = camStateStart + 6;
+
+        SimpleMatrix newCov = deleteColumns(    deletedRows(stateServer.covariance,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
+        assert(newCov.getNumRows() == newCov.getNumCols());
+        stateServer.covariance = newCov;
+
+        stateServer.camStates.remove(oldestCamId);
+
+    }
 
 
+    // TODO: when/how to triangulate the features?
+
+    /**
+     *
+     * The main purpose of this function is to validate the tracks for the measurement update.
+     */
+    private Map<> triangulateValidFeatures() {
+        // TODO: compare msckf_update/update_with_good_ids (tutorial) with remove_lost_features/prune_cam_state_buffer (MSCKF-S Python)
 
 
     }
 
+    private void updateWithTriangulatedFeatures(Map<Integer, Point2D> triangulatedFeatures) {
+        // TODO: compare update_with_good_ids with remove_lost_features/prune_cam_state_buffer (MSCKF-S)
+        if (triangulatedFeatures.isEmpty()) return;
+
+        // TODO: ...
+        SimpleMatrix H = new SimpleMatrix(maxPossibleSize, stateServer.)
+    }
     private void msckfUpdate() {
         // TODO: MSCKF-S equivalent?
     }
@@ -563,5 +590,7 @@ public abstract class MsckfAbstract implements Msckf {
         stateServer.imuState.velocity = p.getMatrix();
 
     }
+
+
 
 }
