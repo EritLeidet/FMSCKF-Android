@@ -44,6 +44,7 @@ import org.ejml.sparse.csc.factory.DecompositionFactory_DSCC;
 import org.ejml.sparse.csc.factory.LinearSolverFactory_DSCC;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -254,7 +255,7 @@ public abstract class MsckfAbstract implements Msckf {
             }
         }
 
-        msckf_update(); // TODO
+        msckfUpdate(); // TODO
 
         // Remove the camera states from the state vector
         int camStateStart = 15;
@@ -302,22 +303,62 @@ public abstract class MsckfAbstract implements Msckf {
         }
         // TODO: (skipped some stuff from prune_cam_state_buffer here)
 
+        ekfUpdate();
+
 
     }
 
-    private void updateWithTriangulatedFeatures(Map<Integer, Point2D> triangulatedFeatures) {
+    /**
+     * Run an EKF update with valid tracks.
+     * This function computes the individual jacobians and residuals for each track and combines them into 2 large
+     * matrices for a big EKF Update at the end.
+     * @param validatedFeatures Should only contain tracks that have gone through some sort of preprocessing to remove outliers. // TODO: have I done that?
+     */
+    private void updateWithTriangulatedFeatures(List<Feature> validatedFeatures) {
         // TODO: compare update_with_good_ids with remove_lost_features/prune_cam_state_buffer (MSCKF-S)
-        if (triangulatedFeatures.isEmpty()) return;
+        if (validatedFeatures.isEmpty()) return;
+
+        // Preallocation of our update matrices.
+        // The -3 comes from the nullspace projection
+        int maxSize = validatedFeatures.size() * 2 *
 
         // TODO: ...
-        SimpleMatrix H = new SimpleMatrix(maxPossibleSize, stateServer.)
+        ekfUpdate();
     }
+
+
     private void msckfUpdate() {
         // TODO: MSCKF-S equivalent?
     }
     private void removeLostFeatures() {
-        // TODO: is pruning features even in the tutorial?
         // TODO: compare compute_residual_and_jacobian (tutorial) to remove_lost_features
+
+        List<Integer> invalidFeatureIds = new LinkedList<>();
+        List<Feature> processedFeatures = new LinkedList<>();
+        for (Feature feature : stateServer.mapServer.values()) {
+            // Pass the features that are still being tracked
+            if (feature.observations.containsKey(stateServer.imuState.id)) {
+                continue;
+            }
+            if (feature.observations.size() < 3) { // (this only affects lost features)
+                invalidFeatureIds.add(feature.id);
+                continue;
+            }
+
+            // TODO: initialize feature position here or in submethod?
+            // TODO: ...
+            processedFeatures.add(feature);
+
+            // TODO: ...
+        }
+        // TODO: ...
+        // Remove the features that do not have enough measurements.
+        for (Integer featureId : invalidFeatureIds) {
+            stateServer.mapServer.remove(featureId);
+        }
+
+        if ()
+        // TODO: ...
     }
 
     private void addFeatureObservations(FeatureMessage featureMsg) {
@@ -425,7 +466,7 @@ public abstract class MsckfAbstract implements Msckf {
     /**
      * Update the state vector given a deltaX computed from a measurement update.
      */
-    public void kalmanUpdate(List<Integer> featureIds, DMatrixRMaj H, SimpleMatrix r) {
+    public void ekfUpdate(List<Integer> featureIds, DMatrixRMaj H, SimpleMatrix r) {
         // TODO:  Check if H and r are empty?
 
         // Decompose the final Jacobian matrix to reduce computational complexity.

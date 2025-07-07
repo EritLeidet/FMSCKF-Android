@@ -81,4 +81,6 @@ dependencies {
     implementation("org.ejml:ejml-core:0.44.0")
 
     implementation(libs.commons.geometry.euclidean)
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-collections4
+    implementation(libs.commons.collections4)
 }

@@ -19,6 +19,7 @@ import static java.lang.Double.min;
 
 import com.android.msckfs.utils.MathUtils;
 
+import org.apache.commons.collections4.map.LinkedMap;
 import org.apache.commons.numbers.quaternion.Quaternion;
 import org.ddogleg.struct.Tuple2;
 import org.ejml.data.DMatrixRMaj;
@@ -47,11 +48,12 @@ public class Feature {
     // TODO: do observations get REMOVED? So that list doesn't grow infinitely?
 
     public boolean isInitialized = false;
+
     /**
-     * Associates IDs of camera states in which the features has been observed and the
-     * Image coordinates at which the feature has been observed. Inserted chronologically.
+     * IDs of camera state mapped to the image coordinates at which the feature has been observed. Sorted by inserted order.
      */
-    public final List<  Tuple2<Integer,DMatrixRMaj>    > observations;
+    public final LinkedMap<Integer,DMatrixRMaj> observations;
+
    //  public List<Integer> cameraIds = new ArrayList<>(); // IDs of camera states in which the features has been observed. Inserted chronologically.
 
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();

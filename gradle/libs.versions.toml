@@ -4,6 +4,7 @@ boofcvAndroid = "1.2.2"
 boofcvCore = "1.2.2"
 cameraCore = "1.5.0-beta01"
 cameraEffects = "1.4.2"
+commonsCollections4 = "4.5.0"
 commonsGeometryEuclidean = "1.0"
 commonsNumbersCore = "1.2"
 ejmlCore = "0.44.0"
@@ -31,6 +32,7 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 boofcv-android = { module = "org.boofcv:boofcv-android" }
 boofcv-boofcv-android = { module = "org.boofcv:boofcv-android", version.ref = "boofcvAndroid" }
 boofcv-core = { module = "org.boofcv:boofcv-core", version.ref = "boofcvCore" }
+commons-collections4 = { module = "org.apache.commons:commons-collections4", version.ref = "commonsCollections4" }
 commons-geometry-euclidean = { module = "org.apache.commons:commons-geometry-euclidean", version.ref = "commonsGeometryEuclidean" }
 commons-numbers-core = { module = "org.apache.commons:commons-numbers-core", version.ref = "commonsNumbersCore" }
 ejml-core = { module = "org.ejml:ejml-core", version.ref = "ejmlCore" }
