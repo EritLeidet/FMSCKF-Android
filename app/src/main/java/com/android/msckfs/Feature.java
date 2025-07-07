@@ -13,6 +13,10 @@ import static org.ejml.dense.row.CommonOps_DDRM.transpose;
 import static org.ejml.dense.row.CommonOps_DDRM.subtract;
 import static org.ejml.dense.row.NormOps_DDRM.normP2;
 
+
+import static java.lang.Double.max;
+import static java.lang.Double.min;
+
 import com.android.msckfs.utils.MathUtils;
 
 import org.apache.commons.numbers.quaternion.Quaternion;
@@ -42,6 +46,7 @@ public class Feature {
     // TODO: add observations to list.
     // TODO: do observations get REMOVED? So that list doesn't grow infinitely?
 
+    public boolean isInitialized = false;
     /**
      * Associates IDs of camera states in which the features has been observed and the
      * Image coordinates at which the feature has been observed. Inserted chronologically.
@@ -51,6 +56,7 @@ public class Feature {
 
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
 
+    private final DMatrixRMaj position = new DMatrixRMaj();
     public Feature(int id, Integer cameraId) {
         this.observations = new LinkedList<>();
         this.id = id;
@@ -155,8 +161,7 @@ public class Feature {
         DMatrixRMaj solution = new DMatrixRMaj(new double[] {
                 initialPosition.get(0) / initialPosition.get(2),
                 initialPosition.get(1) / initialPosition.get(2),
-                1.0 / initialPosition.get(2)
-        });
+                1.0 / initialPosition.get(2)});
 
         // Apply Levenberg-Marquart method to solve for the 3d position.
         double lambd = Config.INITIAL_DAMPING;
@@ -173,46 +178,84 @@ public class Feature {
 
         // Outer loop
         while (outerLoopCount < Config.OUTER_LOOP_MAX_ITERATION && deltaNorm > Config.ESTIMATION_PRECISION) {
-            SimpleMatrix A = new SimpleMatrix(3,3);
-            SimpleMatrix b = new SimpleMatrix(3,1);
+            SimpleMatrix A = new SimpleMatrix(3, 3);
+            SimpleMatrix b = new SimpleMatrix(3, 1);
 
             for (int i = 0; i < camPoses.size(); i++) { // camPoses.size() == measurements.size()
-                SimpleMatrix J = new SimpleMatrix(2,3);
-                SimpleMatrix r = new SimpleMatrix(2,1);
-                double w = calcJ(camPoses.get(i), solution, measurements.get(i), J, r);
+                SimpleMatrix J = new SimpleMatrix(2, 3);
+                SimpleMatrix r = new SimpleMatrix(2, 1);
+                double w = calcJacobian(camPoses.get(i), solution, measurements.get(i), J, r);
                 if (w == 1.0) {
                     A = A.plus(J.transpose().mult(J));
                     b = b.plus(J.transpose().mult(r));
                 } else {
-                    A = A.plus(J.transpose().mult(J)).scale(w*w);
-                    b = b.plus(J.transpose().mult(r)).scale(w*w);
+                    A = A.plus(J.transpose().mult(J)).scale(w * w);
+                    b = b.plus(J.transpose().mult(r)).scale(w * w);
                 }
-
-                // TODO: something about the loop brackets, where starts / ends is wrong.
-
+            }
             // Inner loop.
             // Solve for the delta that can reduce the total cost.
             while (innerLoopCount < Config.INNER_LOOP_MAX_ITERATION && !isCostReduced) {
                 final DMatrixRMaj delta = new DMatrixRMaj();
                 {
                     final DMatrixRMaj damper = MathUtils.scale(lambd, identity(3));
-                    final DMatrixRMaj a = add(A.getDDRM(), damper,null);
+                    final DMatrixRMaj a = add(A.getDDRM(), damper, null);
                     denseSolver.setA(a);
-                    denseSolver.solve(b.getDDRM(),delta);
+                    denseSolver.solve(b.getDDRM(), delta);
                 }
                 DMatrixRMaj newSolution = subtract(solution, delta, null);
-                double deltaNorm = norm(delta) // TODO: which norm was it again?
+                double deltaNorm = norm(delta); // TODO: which norm was it again?
 
                 double newCost = 0.0;
+                for (int i = 0; i < camPoses.size(); i++) {
+                    newCost += cost(camPoses.get(i), newSolution, measurements.get(i));
+                }
 
+                if (newCost < totalCost) {
+                    isCostReduced = true;
+                    solution = newSolution;
+                    totalCost = newCost;
+                    lambd = max(lambd/10.0, 1e-10);
+                } else {
+                    isCostReduced = false;
+                    lambd = min(lambd*10.0, 1e12);
+
+                }
+                innerLoopCount++;
+            } // Inner loop.
+            innerLoopCount = 0;
+            outerLoopCount++;
+        } // Outer loop.
+
+        // Covert the feature position from inverse depth
+        // representation to its 3d coordinate.
+        DMatrixRMaj finalPosition = new DMatrixRMaj(new double[]{
+                solution.get(0) / solution.get(2),
+                solution.get(1) / solution.get(2),
+                1.0 / solution.get(2)});
+
+        // Check if the solution is valid. Make sure the feature
+        // is in front of every camera frame observing it.
+        boolean isValidSolution = true;
+        for (Isometry3D pose : camPoses) {
+            DMatrixRMaj buffer = mult(pose.R, finalPosition, null);
+            add(buffer, pose.t, this.position);
+            if (this.position.get(2) <= 0) {
+                isValidSolution = false;
+                break;
             }
         }
-        // TODO: ..
 
+        // Convert the feature position to the world frame.
+        {
+            DMatrixRMaj buffer = mult(Tc0w.R, finalPosition, null);
+            add(buffer, Tc0w.t, this.position);
+        }
 
-
-
+        this.isInitialized = isValidSolution;
+        return isValidSolution;
     }
+
 
     /**
      * Compute the Jacobian of the camera observation.

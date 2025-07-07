@@ -275,8 +275,32 @@ public abstract class MsckfAbstract implements Msckf {
      *
      * The main purpose of this function is to validate the tracks for the measurement update.
      */
-    private Map<> triangulateValidFeatures() {
+    private void triangulateValidFeatures(List<Feature> features) {
         // TODO: compare msckf_update/update_with_good_ids (tutorial) with remove_lost_features/prune_cam_state_buffer (MSCKF-S Python)
+
+        if (features.isEmpty()) return;
+
+        List<Feature> triangulatedFeatures = new ArrayList<>(features.size());
+
+        // TODO: ...
+        for (Feature feature : features) {
+            // TODO: ...
+            if (!feature.isInitialized) {
+                if (!feature.checkMotion(stateServer.camStates)) {
+                    // TODO: ...
+                    continue;
+                }
+                boolean ret = feature.initializePosition(stateServer.camStates);
+                if (!ret) {
+                    // TODO: ...
+                    continue;
+                }
+                // TODO: ...
+            }
+            triangulatedFeatures.add(feature); // TODO: should I really use a feature that may already have been used in a past iteration?
+            // TODO: ..
+        }
+        // TODO: (skipped some stuff from prune_cam_state_buffer here)
 
 
     }
