@@ -11,7 +11,7 @@ public class CamState extends State {
 
 
     public Quaternion orientation; // vec4d
-    public DMatrixRMaj position; // vec3d
+    public DMatrixRMaj position; // vec3d // TODO: consider making Simplematrix? Why not?
 
     // TODO: what are these for? Does tutorial have them too?
     public Quaternion orientationNull;

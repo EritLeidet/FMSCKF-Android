@@ -17,22 +17,24 @@ public class ImuState extends State {
      body frame. The z axis of the body frame should point upwards.
      Normally, this transform should be identity.
      **/
-    private Isometry tImu;
+    private Isometry3D tImu;
 
-    public final SimpleMatrix rImuCam;
-    public final SimpleMatrix tCamImu; // rotation from imu to cam0, translation from cam0 to imu
+    public final SimpleMatrix rImuCam = null; // TODO: initalize
+
+    // TODO: initialize:
+    public final SimpleMatrix tCamImu = null; // rotation from imu to cam0, translation from cam0 to imu
 
 
     //public final static Vector gravity;
 
     public Quaternion orientation;
 
-    public SimpleMatrix gyroBias = new DMatrixRMaj(3,1);
-    public SimpleMatrix accBias = new DMatrixRMaj(3,1);
+    public SimpleMatrix gyroBias = new SimpleMatrix(3,1);
+    public SimpleMatrix accBias = new SimpleMatrix(3,1);
 
     // Velocity of the IMU.
-    public SimpleMatrix velocity = new DMatrixRMaj(3,1);
-    public SimpleMatrix position = new DMatrixRMaj(3,1);
+    public SimpleMatrix velocity = new SimpleMatrix(3,1);
+    public SimpleMatrix position = new SimpleMatrix(3,1);
 
     public static final DMatrixRMaj GRAVITY = new DMatrixRMaj(new double[]{0,0,-9.81});
 

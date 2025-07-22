@@ -7,7 +7,7 @@ import org.ejml.dense.row.CommonOps_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 // JPL Convention used by my vector representation of quaternions: [x, y, z, w(scalar)]^T
-// Convention used by Quaternion class: [w(scalar),x,y,z]
+// Convention used by Apache Commons Quaternion class: [w(scalar),x,y,z]
 public class MathUtils {
 
     // own work.
@@ -25,7 +25,7 @@ public class MathUtils {
      */
     public static SimpleMatrix deletedRows(SimpleMatrix m, int start, int end) {
         SimpleMatrix upperRows = m.rows(0, start);
-        SimpleMatrix lowerRows = m.rows(end, m.getNumRows());
+        SimpleMatrix lowerRows = m.rows(end, SimpleMatrix.END);
         return m.concatRows(upperRows, lowerRows);
 
     }
@@ -38,7 +38,7 @@ public class MathUtils {
      */
     public static SimpleMatrix deleteColumns(SimpleMatrix m, int start, int end) {
         SimpleMatrix leftCols = m.cols(0, start);
-        SimpleMatrix rightCols = m.cols(end, m.getNumCols());
+        SimpleMatrix rightCols = m.cols(end, SimpleMatrix.END);
         return m.concatColumns(leftCols, rightCols);
 
     }
@@ -46,21 +46,18 @@ public class MathUtils {
 
     // own work.
     public static SimpleMatrix quaternionToVector(Quaternion q) {
-        return new ArrayRealVector(new double[]{q.getX(), q.getY(), q.getZ(), q.getScalarPart()});
+        return null; // TODO: new ArrayRealVector(new double[]{q.getX(), q.getY(), q.getZ(), q.getScalarPart()});
     }
 
     // own work.
     public static Quaternion vectorToQuaternion(SimpleMatrix v) {
-        assert(v.getDimension() == 4);
-        return Quaternion.of(v.getEntry(3), v.getEntry(0), v.getEntry(1), v.getEntry(2));
+        assert(v.getNumCols() == 1);
+        return Quaternion.of(v.get(3), v.get(0), v.get(1), v.get(2));
     }
     public static DMatrixRMaj quaternionToRotation(Quaternion q) {
-        // TODO: different quaternion convention C++ / Java
-        final RealVector qVec = MatrixUtils.createRealVector(new double[]{q.getX(), q.getY(), q.getZ(), q.getScalarPart()});
-        final double q4 = q.getScalarPart();
-        // TODO: operate instead of preMultiply?
-        return MatrixUtils.createRealIdentityMatrix(3).scalarMultiply(2*q4*q4-1).subtract(skewSymmetric(qVec).scalarMultiply(2*q4)).add(transpose(qVec).preMultiply(qVec.mapMultiply(2))); // TODO: instead of custom tranpose, convert to
+        return null; // TODO
     }
+
 
     public static Quaternion rotationToQuaternion(DMatrixRMaj mat) {return null;} // TODO
 
@@ -68,6 +65,10 @@ public class MathUtils {
         return null;
     }
     public static DMatrixRMaj skewSymmetric(DMatrixRMaj mat) {
+        return null; //TODO
+    }
+
+    public static SimpleMatrix skewSymmetric(SimpleMatrix mat) {
         return null; //TODO
     }
 

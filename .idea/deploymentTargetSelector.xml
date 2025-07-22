@@ -16,6 +16,14 @@
       </SelectionState>
       <SelectionState runConfigName="FeatureTracker (4)">
         <option name="selectionMode" value="DROPDOWN" />
+        <DropdownSelection timestamp="2025-07-08T14:09:26.621605Z">
+          <Target type="DEFAULT_BOOT">
+            <handle>
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=T4694DV8ZTNR5H8X" />
+            </handle>
+          </Target>
+        </DropdownSelection>
+        <DialogSelection />
       </SelectionState>
     </selectionStates>
   </component>

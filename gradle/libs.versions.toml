@@ -47,5 +47,5 @@ ojalgo = { module = "org.ojalgo:ojalgo", version.ref = "ojalgo" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "1.9.22" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version = "2.1.0" }
 

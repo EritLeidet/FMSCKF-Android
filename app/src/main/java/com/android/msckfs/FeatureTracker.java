@@ -3,12 +3,17 @@ package com.android.msckfs;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.util.Log;
+import android.util.Range;
 
+import androidx.annotation.OptIn;
+import androidx.camera.camera2.interop.Camera2Interop;
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
 import androidx.camera.core.CameraEffect;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -21,7 +26,6 @@ import org.ddogleg.struct.DogArray_I8;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -62,7 +66,7 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
 
 
     private static final int respawnThreshold = 50; // if number of tracks drops below this value it will attempt to spawn more
-    private static final int maxFeatures = 350;
+    private static final int maxFeatures = 200; // 350
 
     // TODO: didn't I need to implement some kind of distortion?
 
@@ -76,16 +80,19 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
 
     }
 
+    // TODO: warum ist langsamer als BoofCV Demo-App? Vielleicht mal im Produktionsmodus ausführen?
+
     @Override
     protected UseCaseGroup getUseCases() {
         UseCaseGroup.Builder useCases = new UseCaseGroup.Builder();
-        useCases.addUseCase(getPreviewUseCase());
         useCases.addUseCase(getAnalyzerUseCase());
+        useCases.addUseCase(getPreviewUseCase());
         useCases.addEffect(effect);
         return useCases.build();
     }
 
 
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private UseCase getAnalyzerUseCase() {
         // create overlay effect for feature visualization
         handlerThread = new HandlerThread("OverlayEffect thread"); // Gemini suggested to use not use effect on the main thread. Reduced GL Error 0x505 (GL_OUT_OF_MEMORY) warning.
@@ -97,7 +104,7 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
         };
 
 
-        effect = new OverlayEffect(CameraEffect.PREVIEW,0, handler, errorListener); // TODO: queueDepth?
+        effect = new OverlayEffect(CameraEffect.PREVIEW,8, handler, errorListener); // TODO: queueDepth? // if queueDepth too low, overlayEffect lags behind camera preview
 
         Visualizer visualizer = new Visualizer();
         // TODO: add to CameraProviderFuture
@@ -108,11 +115,23 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
 
 
         cameraExecutor = Executors.newSingleThreadExecutor();
-        ImageAnalysis imageAnalysis = new ImageAnalysis.Builder().build(); // TODO: further modify (e.g. resolution) for better frame rate.
+        ImageAnalysis.Builder builder = new ImageAnalysis.Builder();
+
+        // Set resolution.
+        builder.setResolutionSelector(resolutionSelector);
+
+        // Set target frame rate.
+        // Camera2Interop.Extender<ImageAnalysis> ext = new Camera2Interop.Extender<>(builder);
+        // ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+        // ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(30, 30));
+
+        // Build Use Case.
+        ImageAnalysis imageAnalysis = builder.build();
         imageAnalysis.setAnalyzer(cameraExecutor, this);
         return imageAnalysis;
     }
 
+    // TODO: private ResolutionStrategy resolutionStrategy = new ResolutionStrategy();
 
 
     private final DogArray_I8 analyzeBuffer = new DogArray_I8();
@@ -152,19 +171,53 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
      */
      private class Visualizer {
         private final Random rand = new Random();
-        private final Paint paint = new Paint();
+        private List<Paint> paints;
 
+        private boolean firstDraw;
         public Visualizer() {
-            paint.setColor(Color.RED);
-            paint.setStyle(Paint.Style.FILL);
+            paints = new ArrayList<>();
+
+            firstDraw = true;
+
+            int[] colors = new int[] {
+              Color.RED,
+              Color.BLUE,
+              Color.CYAN,
+              Color.GREEN,
+              Color.MAGENTA,
+              Color.YELLOW
+            };
+
+            for (int color : colors) {
+                Paint paint = new Paint();
+                paint.setColor(color);
+                paint.setStyle(Paint.Style.FILL);
+                paints.add(paint);
+            }
+
         }
 
-        public void onDraw(Canvas canvas) {
-            for (PointTrack track : active) {
-                canvas.drawCircle((float) track.pixel.x, (float) track.pixel.y, 5, paint); // TODO: the coordinates are nonsense. Look at the BoofCV demo code.
+
+        public synchronized void onDraw(Canvas canvas) { // TODO: remove synchronized tag?
+            // Debugging: duplicate features? Nope.
+
+            // Clear canvas
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
+            /*
+            if (firstDraw) {
+                canvas.drawCircle(200, 200, 20, paints.get(0));
+                firstDraw = false;
             }
-            // canvas.drawCircle(canvas.getWidth() / 2f, canvas.getHeight() / 2f, 100, paint);
-            //canvas.drawPoint(rand.nextInt(canvas.getWidth()), rand.nextInt(canvas.getWidth()), paint);
+
+             */
+
+            canvas.drawCircle(canvas.getWidth(), canvas.getHeight(), 5, paints.get(0));
+
+
+            for (PointTrack track : active) {
+                canvas.drawCircle((float) track.pixel.x, (float) track.pixel.y, 5, paints.get((int) (track.featureId % paints.size()))); // TODO: the coordinates are nonsense. Look at the BoofCV demo code.
+            }
+
 
         }
 

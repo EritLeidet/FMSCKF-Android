@@ -58,18 +58,17 @@ public class Feature {
 
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
 
-    private final DMatrixRMaj position = new DMatrixRMaj();
+    public SimpleMatrix position;
     public Feature(int id, Integer cameraId) {
-        this.observations = new LinkedList<>();
+        this.observations = new LinkedMap<>();
         this.id = id;
-        this.cameraIds.add(cameraId);
     }
 
     public boolean checkMotion(Map<Integer, CamState> camStates) {
         if (observations.size() < 2) return false;
 
-        Integer firstId = observations.get(0).d0;
-        Integer lastId = observations.get(observations.size()-1).d0;
+        Integer firstId = observations.firstKey();
+        Integer lastId = observations.lastKey();
 
 
         Isometry3D firstCamPose = new Isometry3D(
@@ -82,7 +81,10 @@ public class Feature {
 
         // Get the direction of the feature when it is first observed.
         // This direction is represented in the world frame.
-        DMatrixRMaj featureDirection = new DMatrixRMaj(new double[] {observations.get(0).d1.getX(), observations.get(0).d1.getY(), 1.0});
+        DMatrixRMaj featureDirection = new DMatrixRMaj(new double[] {
+                observations.get(firstId).get(0), // x coordinate
+                observations.get(firstId).get(1), // y coordinate
+                1.0});
         scale((1.0 / normP2(featureDirection)), featureDirection);
         featureDirection = mult(firstCamPose.R, featureDirection, null);
 
@@ -130,11 +132,11 @@ public class Feature {
         // TODO: do I need to return when not enough observations?
         // TODO: if I follow tutorial, the keypoints need to be normalized b4 this method.
 
-        for (Tuple2<Integer, DMatrixRMaj> o : observations) {
-            if (!camStates.containsKey(o.d0)) continue;
-            CamState camState = camStates.get(o.d0);
+        for (Map.Entry<Integer, DMatrixRMaj> observation : observations.entrySet()) {
+            if (!camStates.containsKey(observation.getKey())) continue;
+            CamState camState = camStates.get(observation.getKey());
 
-            measurements.add(o.d1);
+            measurements.add(observation.getValue());
 
             // This camera pose will take a vector from this camera frame
             // to the world frame.
@@ -206,7 +208,7 @@ public class Feature {
                     denseSolver.solve(b.getDDRM(), delta);
                 }
                 DMatrixRMaj newSolution = subtract(solution, delta, null);
-                double deltaNorm = norm(delta); // TODO: which norm was it again?
+                // TODO: deltaNorm = norm(delta); // TODO: which norm was it again?
 
                 double newCost = 0.0;
                 for (int i = 0; i < camPoses.size(); i++) {
@@ -300,7 +302,7 @@ public class Feature {
         r.setTo(SimpleMatrix.wrap(subtract(zHat,z,null)));
 
         // Compute the weight based on the residual.
-        double e =; // TODO: which norm again?
+        double e = 0; // TODO: norm() // TODO: which norm again?
         if (e <= Config.HUBER_EPSILON) {
             return 1.0;
         } else {

@@ -27,8 +27,12 @@ public class Isometry3D {
 
     }
 
-    public Isometry3D inverse();
+    public Isometry3D inverse(){
+        return null; //TODO
+    }
 
-    public Isometry3D mult(Isometry3D i);
+    public Isometry3D mult(Isometry3D i){
+        return null; //TODO
+    }
 
 }

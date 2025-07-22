@@ -13,7 +13,7 @@ import static org.ejml.dense.row.CommonOps_DDRM.insert;
 import static org.ejml.dense.row.CommonOps_DDRM.mult;
 import static org.ejml.dense.row.CommonOps_DDRM.scale;
 import static org.ejml.dense.row.CommonOps_DDRM.setIdentity;
-import static org.ejml.dense.row.CommonOps_DDRM.solve;
+import static org.ejml.dense.row.CommonOps_DDRM.subtract;
 import static org.ejml.dense.row.CommonOps_DDRM.transpose;
 import static org.ejml.dense.row.NormOps_DDRM.normP2;
 
@@ -24,24 +24,12 @@ import static java.lang.Math.sin;
 import org.apache.commons.numbers.quaternion.Quaternion;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.data.DMatrixSparseCSC;
-import org.ejml.data.MatrixSparse;
-import org.ejml.data.MatrixType;
-import org.ejml.dense.row.CommonOps_DDRM;
-import org.ejml.dense.row.decomposition.chol.CholeskyDecompositionLDL_DDRM;
-import org.ejml.dense.row.factory.DecompositionFactory_DDRM;
-import org.ejml.dense.row.factory.LinearSolverFactory_DDRM;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
-import org.ejml.interfaces.decomposition.CholeskyLDLDecomposition_F64;
-import org.ejml.interfaces.decomposition.QRDecomposition;
 import org.ejml.interfaces.decomposition.QRSparseDecomposition;
 import org.ejml.interfaces.linsol.LinearSolver;
-import org.ejml.ops.DConvertMatrixStruct;
 import org.ejml.simple.SimpleMatrix;
 import org.ejml.sparse.FillReducing;
-import org.ejml.sparse.csc.CommonOps_DSCC;
-import org.ejml.sparse.csc.decomposition.qr.QrLeftLookingDecomposition_DSCC;
 import org.ejml.sparse.csc.factory.DecompositionFactory_DSCC;
-import org.ejml.sparse.csc.factory.LinearSolverFactory_DSCC;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -54,7 +42,9 @@ import java.util.Map;
  * https://github.com/daniilidis-group/msckf_mono/blob/master/include/msckf_mono/msckf.h
  * // TODO: cite paper
  */
+
 public abstract class MsckfAbstract implements Msckf {
+
 
     // TODO: MSCKF State:mu_state cam_states imu_cov cam_cov imucam_cov =====
     private List<ImuMessage> imuBuffer; // TODO: initialize
@@ -68,7 +58,7 @@ public abstract class MsckfAbstract implements Msckf {
 
     // Matrix calculation buffers
     private DMatrixRMaj f, g;
-    private final DMatrixRMaj Fdt, FdtSquare, FdtCube;
+    private final DMatrixRMaj Fdt = null, FdtSquare = null, FdtCube = null; // TODO: initialize
 
     public MsckfAbstract() {
         F = new DMatrixRMaj(15,15);
@@ -144,6 +134,7 @@ public abstract class MsckfAbstract implements Msckf {
 
         static final double OBSERVATION_NOISE = pow(0.035d, 2);
         static final int MAX_CAM_STATES = 20;
+        static final int MIN_TRACK_LENGTH_FOR_UPDATE = 3;
     }
 
     abstract void featuresLocalization();
@@ -159,9 +150,10 @@ public abstract class MsckfAbstract implements Msckf {
         double dt = time - imuState.timestamp;
 
         // TODO: remove gyro/acc bias, line in MSCKF-S?
-        calcF(imu.angularVelocity, imu.linearAcceleration);
+
+        // TODO: calcF(imu.angularVelocity, imu.linearAcceleration);
         calcG();
-        integrate();
+        integrate(0, null, null); // TODO: input params
 
         // Approximate matrix exponential to the 3rd order, which can be
         // considered to be accurate enough assuming dt is within 0.01s
@@ -239,71 +231,152 @@ public abstract class MsckfAbstract implements Msckf {
     }
 
     /**
-     * Basic sliding window which removes the oldest camera state from our state vector.
+     * Basic sliding window which removes the oldest camera states from our state vector.
      */
     private void removeOldCamStates() {
-        // TODO: compare remove_old_clones (tutorial) to prune_cam_state_buffer
+        // TODO: is it possible to only remove a singular CamState inside this method? Why (not)?
+
         if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
 
-        List<Integer> idsToRemove = new ArrayList<>();
-        int oldestCamId = stateServer.camStates.keySet().stream().min(Integer::compareTo).get();
+        // Find two camera states to be removed. Here we choose the oldest two. (Sorted ascending by ID.)
+        List<Integer> rmCamStateIds = new ArrayList<>(2);
+        rmCamStateIds.add(stateServer.camStates.get(0));
+        rmCamStateIds.add(stateServer.camStates.get(1));
 
-        // Run the MSCKF update on any features which have this camera state.
-        for (Map.Entry<Integer,Feature> entry : stateServer.mapServer.entrySet()) {
-            if (entry.getValue().cameraIds.get(0).equals(oldestCamId)) {
-                idsToRemove.add(entry.getKey());
+        // Find the size of the Jacobian matrix.
+        int jacobianRowSize = 0;
+        for (Feature feature : stateServer.mapServer.values()) {
+            List<Integer> involvedCamStateIds = new ArrayList<>(2);
+            for (Integer camId : rmCamStateIds) {
+                if (feature.observations.containsKey(camId)) involvedCamStateIds.add(camId);
+            }
+
+            if (involvedCamStateIds.isEmpty()) continue;
+            if (involvedCamStateIds.size() == 1) {
+                feature.observations.remove(involvedCamStateIds.get(0));
+                continue;
+            }
+
+            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
+                // Ensure there is enough translation to triangulate the feature
+                if (!feature.checkMotion(stateServer.camStates)) {
+                    // If the feature cannot be initialized, just remove
+                    // the observations associated with the camera states
+                    // to be removed.
+                    for (Integer camId : involvedCamStateIds) {
+                        feature.observations.remove(camId);
+                    }
+                    continue;
+                }
+
+                // Intialize the feature position based on all current available measurements.
+                boolean ret = feature.initializePosition(stateServer.camStates);
+                if (!ret) {
+                    for (Integer camId : involvedCamStateIds) {
+                        feature.observations.remove(camId);
+                    }
+                    continue;
+                }
+            }
+            jacobianRowSize += 2 * involvedCamStateIds.size() - 3; // TODO: how to calc jacobianRowSize when only wanting to remove a singular camState? 2 - 3 < 1 ????
+        }
+
+        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, 15 + 6 * stateServer.camStates.size());
+        SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
+        int stackCount = 0;
+        SimpleMatrix Hxj = new SimpleMatrix(,15 + 6 * stateServer.camStates.size()); // TODO: set sizes
+        SimpleMatrix rj = new SimpleMatrix(,1);
+
+
+        for (Feature feature : stateServer.mapServer.values()) {
+            // Check how many camera states to be removed are associated
+            // with this feature
+            List<Integer> involvedCamStateIds = new ArrayList<>(2);
+            for (Integer camId : rmCamStateIds) {
+                if (feature.observations.containsKey(camId)) involvedCamStateIds.add(camId);
+            }
+            featureJacobian(feature, involvedCamStateIds, Hxj, rj); // TODO: only use involved_cam_state_ids? Also see Tutorial.
+
+
+            if (gatingTest(Hxj, rj, involvedCamStateIds.size())) { // TODO: size() or size()-1? in prune_ and remove_ different. See tutorial?
+                Hx.insertIntoThis(stackCount, 0, Hxj);
+                r.insertIntoThis(stackCount, 0, rj);
+                stackCount += Hxj.getNumRows();
+            }
+
+            for (Integer camId : involvedCamStateIds) {
+                feature.observations.remove(camId);
             }
         }
 
-        msckfUpdate(); // TODO
+        Hx = Hx.rows(0, stackCount);
+        r = r.rows(0,stackCount);
 
-        // Remove the camera states from the state vector
-        int camStateStart = 15;
-        int camStateEnd = camStateStart + 6;
+        // Perform measurment update.
+        measurementUpdate(Hx, r); // TODO: In MSCKF-S only uses a subset of CamIDS
 
-        SimpleMatrix newCov = deleteColumns(    deletedRows(stateServer.covariance,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
-        assert(newCov.getNumRows() == newCov.getNumCols());
-        stateServer.covariance = newCov;
+        for (Integer camId : rmCamStateIds) {
+            int idx = stateServer.camStates.indexOf(camId);
+            int camStateStart = 15 + 6*idx;
+            int camStateEnd = camStateStart + 6;
 
-        stateServer.camStates.remove(oldestCamId);
+            // Remove the corresponding rows and columns in the state
+            // covariance matrix.
+            SimpleMatrix newCov = deleteColumns(    deletedRows(stateServer.covariance,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
+            assert(newCov.getNumRows() == newCov.getNumCols());
+            stateServer.covariance = newCov;
 
+            // Remove this camera state in the state vector.
+            stateServer.camStates.remove(camId);
+        }
     }
-
-
-    // TODO: when/how to triangulate the features?
 
     /**
      *
      * The main purpose of this function is to validate the tracks for the measurement update.
      */
-    private void triangulateValidFeatures(List<Feature> features) {
+    private void msckfUpdate(List<Feature> features) {
         // TODO: compare msckf_update/update_with_good_ids (tutorial) with remove_lost_features/prune_cam_state_buffer (MSCKF-S Python)
 
         if (features.isEmpty()) return;
 
-        List<Feature> triangulatedFeatures = new ArrayList<>(features.size());
+        List<Feature> validatedFeatures = new LinkedList<>();
+        // TODO: Logging like in tutorial?
 
-        // TODO: ...
         for (Feature feature : features) {
-            // TODO: ...
-            if (!feature.isInitialized) {
+
+            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
+
+                // Ensure there is enough translation to triangulate the feature
                 if (!feature.checkMotion(stateServer.camStates)) {
-                    // TODO: ...
+                    // If the feature cannot be initialized, just remove
+                    // the observations associated with the camera states
+                    // to be removed.
+
                     continue;
                 }
+
+                // Intialize the feature position based on all current available measurements.
                 boolean ret = feature.initializePosition(stateServer.camStates);
                 if (!ret) {
-                    // TODO: ...
                     continue;
                 }
-                // TODO: ...
             }
-            triangulatedFeatures.add(feature); // TODO: should I really use a feature that may already have been used in a past iteration?
+            validatedFeatures.add(feature);
             // TODO: ..
         }
         // TODO: (skipped some stuff from prune_cam_state_buffer here)
 
-        ekfUpdate();
+
+        updateWithValidatedFeatures(validatedFeatures);
+
+        // TODO: remove the processed features from the map: here or somewhere else?
+        for (Feature feature : validatedFeatures) {
+            stateServer.mapServer.remove(feature.id); // TODO: I think the features themselves should only be deleted in remove_lost_features.
+        }
+
+        // TODO: is there even a situation where a feature gets initialized and not get removed right away? I mean, you have to reuse features to track position, right?
+
 
 
     }
@@ -312,27 +385,56 @@ public abstract class MsckfAbstract implements Msckf {
      * Run an EKF update with valid tracks.
      * This function computes the individual jacobians and residuals for each track and combines them into 2 large
      * matrices for a big EKF Update at the end.
-     * @param validatedFeatures Should only contain tracks that have gone through some sort of preprocessing to remove outliers. // TODO: have I done that?
+     * @param validatedFeatures Should only contain tracks that have gone through some sort of preprocessing to remove outliers. // TODO: RANSAC
      */
-    private void updateWithTriangulatedFeatures(List<Feature> validatedFeatures) {
+    private void updateWithValidatedFeatures(List<Feature> validatedFeatures) {
         // TODO: compare update_with_good_ids with remove_lost_features/prune_cam_state_buffer (MSCKF-S)
-        if (validatedFeatures.isEmpty()) return;
+        // TODO: make sure that differences in remove_lost_features/prune_cam_state_buffer are adressed. What's missing?
+        if (validatedFeatures.isEmpty()) return; // TODO: throw exception here, bc. calling method has to check whether isEmpty() anyway?
 
         // Preallocation of our update matrices.
-        // The -3 comes from the nullspace projection
-        int maxSize = validatedFeatures.size() * 2 *
+        // Each feature provides 2 residuals per feature * the maximum number of features(max_track_length).
+        // The -3 comes from the nullspace projection (see below)
+        int jacobianRowSize = validatedFeatures
+                .stream()
+                .mapToInt(feature -> 2 * feature.observations.size() -3)
+                .reduce(0,Integer::sum); // TODO: why does Tutorial use max_possible_size?
 
-        // TODO: ...
-        ekfUpdate();
+        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, 15 + 6 * stateServer.camStates.size()); // TODO: do I even need to set the sizes yet?
+        SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
+        int stackCount = 0;
+
+        SimpleMatrix Hxj = new SimpleMatrix(, ); // TODO: set sizes
+        SimpleMatrix rj = new SimpleMatrix(,);
+
+
+        // TODO: nur mit den nötigen Cam-IDs machen, wie in MSCKF-S?
+
+        for (Feature feature : validatedFeatures) {
+
+            featureJacobian(feature, Hxj, rj);
+
+            if (gatingTest(Hxj, rj, feature.observations.size()-1) {
+                Hx.insertIntoThis(stackCount, 0, Hxj);
+                r.insertIntoThis(stackCount, 0, rj);
+                stackCount += Hxj.getNumRows();
+            }
+            // Put an upper bound on the row size of measurement Jacobian, // TODO: dieser Teil ist in MSCKF-S nur bei prune-buffer, nicht bei remove-lost.
+            // which helps guarantee the executation time.
+            if (stackCount > 1500) break;
+        }
+        Hx.reshape(stackCount, Hx.getNumCols()); // TODO: falls ich den upper bound wegnehme, dann auch das hier.
+        r.reshape(stackCount, 1);
+
+        measurementUpdate(Hx, r);
+
+
     }
 
 
-    private void msckfUpdate() {
-        // TODO: MSCKF-S equivalent?
-    }
     private void removeLostFeatures() {
         // TODO: compare compute_residual_and_jacobian (tutorial) to remove_lost_features
-
+        int jacobianRowSize = 0;
         List<Integer> invalidFeatureIds = new LinkedList<>();
         List<Feature> processedFeatures = new LinkedList<>();
         for (Feature feature : stateServer.mapServer.values()) {
@@ -340,25 +442,73 @@ public abstract class MsckfAbstract implements Msckf {
             if (feature.observations.containsKey(stateServer.imuState.id)) {
                 continue;
             }
-            if (feature.observations.size() < 3) { // (this only affects lost features)
+
+            if (feature.observations.size() < 3) {
                 invalidFeatureIds.add(feature.id);
                 continue;
             }
 
-            // TODO: initialize feature position here or in submethod?
-            // TODO: ...
-            processedFeatures.add(feature);
+            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
+                // Ensure there is enough translation to triangulate the feature
+                if (!feature.checkMotion(stateServer.camStates)) {
+                    // If the feature cannot be initialized, just remove
+                    // the observations associated with the camera states
+                    // to be removed.
+                    invalidFeatureIds.add(feature.id);
+                    continue;
+                }
 
-            // TODO: ...
+                // Intialize the feature position based on all current available measurements.
+                boolean ret = feature.initializePosition(stateServer.camStates);
+                if (!ret) {
+                    invalidFeatureIds.add(feature.id);
+                    continue;
+                }
+            }
+
+            // Each feature provides 2 residuals per feature.
+            // The -3 comes from the nullspace projection.
+            jacobianRowSize += 2 * feature.observations.size() - 3;
+            processedFeatures.add(feature);
         }
-        // TODO: ...
         // Remove the features that do not have enough measurements.
         for (Integer featureId : invalidFeatureIds) {
             stateServer.mapServer.remove(featureId);
         }
 
-        if ()
-        // TODO: ...
+        // Return if there is no lost feature to be processed.
+        if (processedFeatures.isEmpty()) return;
+
+        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, 15 + 6 * stateServer.camStates.size());
+        SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
+        int stackCount = 0;
+        SimpleMatrix Hxj = new SimpleMatrix(, ); // TODO: set sizes
+        SimpleMatrix rj = new SimpleMatrix(,);
+
+        // Process the features which lose track.
+        for (Feature feature : processedFeatures) {
+            featureJacobian(feature, Hxj, rj);
+
+            if (gatingTest(Hxj, rj, feature.observations.size()-1) {
+                Hx.insertIntoThis(stackCount, 0, Hxj);
+                r.insertIntoThis(stackCount, 0, rj);
+                stackCount += Hxj.getNumRows();
+            }
+            // Put an upper bound on the row size of measurement Jacobian, // TODO: dieser Teil ist in MSCKF-S nur bei prune-buffer, nicht bei remove-lost.
+            // which helps guarantee the execution time.
+            if (stackCount > 1500) break;
+        }
+        Hx.reshape(stackCount, Hx.getNumCols()); // TODO: falls ich den upper bound wegnehme, dann auch das hier.
+        r.reshape(stackCount, 1);
+
+        // Perform the measurement update step.
+        measurementUpdate(Hx, r);
+
+        // Remove all processed features from the map.
+        for (Feature feature : processedFeatures) {
+            stateServer.mapServer.remove(feature.id);
+        }
+
     }
 
     private void addFeatureObservations(FeatureMessage featureMsg) {
@@ -367,19 +517,21 @@ public abstract class MsckfAbstract implements Msckf {
 
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
     //private final LinearSolver<DMatrixSparseCSC,DMatrixRMaj> sparseSolver = LinearSolverFactory_DSCC.qr(FillReducing.NONE);
-    private final DMatrixRMaj A, X;
+    private final DMatrixRMaj A = null, X = null; // TODO: initialize
     private boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) { // TODO: doch nicht SimpleMatrix?
         DMatrixRMaj P1 = H.mult(stateServer.covariance).mult(H.transpose()).getDDRM();
         DMatrixRMaj P2 = SimpleMatrix.identity(H.getNumRows()).scale(Config.OBSERVATION_NOISE).getDDRM();
         add(P1,P2,A);
 
         // Solve linear system
-        solver.setA(A);
-        solver.solve(r.getDDRM(), X); // X is a column vector
-        assert(!solver.modifiesB()); // TODO: move assert to constructor.
+        denseSolver.setA(A);
+        denseSolver.solve(r.getDDRM(), X); // X is a column vector
+        assert(!denseSolver.modifiesB()); // TODO: move assert to constructor.
         double gamma = r.transpose().dot(SimpleMatrix.wrap(X));
         // TODO: are there other calculations with vectors where a different type of calculation (e.g. dot product instead of matrix product) was required?
 
+        // TODO: ...
+        return false; // TODO!
     }
 
     private void batchImuProcessing(double timeBound) {
@@ -404,7 +556,7 @@ public abstract class MsckfAbstract implements Msckf {
 
     }
 
-    private final DMatrixRMaj J;
+    private final DMatrixRMaj J = null; // TODO: initialize
 
     /**
      * Generates a new camera state and adds it to the full state and covariance.
@@ -420,7 +572,7 @@ public abstract class MsckfAbstract implements Msckf {
         SimpleMatrix tcw = stateServer.imuState.position.plus(Rwi.transpose().mult(tci));
         CamState camState = new CamState(stateServer.imuState.id, timestamp);
         camState.orientation = rotationToQuaternion(Rwc.getDDRM());
-        camState.position.setTo(tcw);
+        camState.position.setTo(tcw.getDDRM());
         camState.orientationNull = camState.orientation;
         camState.positionNull.setTo(camState.position);
         stateServer.camStates.put(stateServer.imuState.id, camState);
@@ -466,7 +618,7 @@ public abstract class MsckfAbstract implements Msckf {
     /**
      * Update the state vector given a deltaX computed from a measurement update.
      */
-    public void ekfUpdate(List<Integer> featureIds, DMatrixRMaj H, SimpleMatrix r) {
+    public void measurementUpdate(SimpleMatrix H, SimpleMatrix r) {
         // TODO:  Check if H and r are empty?
 
         // Decompose the final Jacobian matrix to reduce computational complexity.
@@ -474,11 +626,11 @@ public abstract class MsckfAbstract implements Msckf {
         if (H.getNumRows() > H.getNumCols()) {
             // H_sparse
             DMatrixSparseCSC Hsparse = new DMatrixSparseCSC(H.numRows, H.numCols);
-            Hsparse.setTo(H);
+            Hsparse.setTo(H.getDDRM());
 
             QR.decompose(Hsparse);
             DMatrixSparseCSC Q = QR.getQ(null,true); // Python equivalent: linalg.qr(a, mode='reduced')
-            DMatrixSparseCSC R = QR.getR(null,TODO); // TODO
+            DMatrixSparseCSC R = QR.getR(null,false); // TODO: true or false?
             // TODO: everything else in this bracket logically correct?
 
             // H_thin
@@ -488,7 +640,7 @@ public abstract class MsckfAbstract implements Msckf {
             rThin = SimpleMatrix.wrap(new DMatrixRMaj(Q)).transpose().mult(r);
             
         } else {
-            Hthin = SimpleMatrix.wrap(H);
+            Hthin = H;
             rThin = r;
         }
 
@@ -537,7 +689,7 @@ public abstract class MsckfAbstract implements Msckf {
             SimpleMatrix deltaXcam = deltaX.rows(15 + entry.getKey() * 6, 21 + entry.getKey() * 6); // TODO: are these coords accurate for mono? Where does the 27 in MSCKF-S here come from? Smth. about 21+6?
             Quaternion dqCam = smallAngleQuaternion(deltaXcam.rows(0,3));
             camState.orientation = dqCam.multiply(camState.orientation);
-            camState.position = camState.position.plus(deltaXcam.rows(3,deltaXcam.getNumRows()));
+            add(camState.position, deltaXcam.rows(3,deltaXcam.getNumRows()).getDDRM(), camState.position);
         }
 
         // Update state covariance
@@ -552,14 +704,110 @@ public abstract class MsckfAbstract implements Msckf {
 
     }
 
-    public void triangulate() { //TODO: MATLAB and MSCKF Tutorial, input params?
-
-    }
 
     /**
      * Compute the jacobian and the residual of a 3D point.
+     * Modifies Hx, r.
      */
-    abstract void calcResAndJ();
+    private void featureJacobian(Feature feature, List<Integer> camStateIds, SimpleMatrix Hx, SimpleMatrix r) {
+        int jacobianRowSize = 2 * camStateIds.size();
+        SimpleMatrix Hxj = new SimpleMatrix(jacobianRowSize, 15 + stateServer.camStates.size() * 6);
+        SimpleMatrix Hfj = new SimpleMatrix(jacobianRowSize, 3);
+        SimpleMatrix rj = new SimpleMatrix(jacobianRowSize,1);
+
+        SimpleMatrix Hxi = new SimpleMatrix(2,6);
+        SimpleMatrix Hfi = new SimpleMatrix(2,3);
+        SimpleMatrix ri = new SimpleMatrix(2,1);
+
+        int stackCount = 0;
+        for (Integer camId : camStateIds) {
+            measurementJacobian(camId, feature, Hxi, Hfi, ri);
+
+            // Stack the Jacobians.
+            int idx = stateServer.camStates.indexOf(camId);
+            Hxj.insertIntoThis(stackCount, 15 + 6 * idx, Hxi);
+            Hfj.insertIntoThis(stackCount,0,Hfi);
+            rj.insertIntoThis(stackCount,0,ri);
+            stackCount += 2;
+        }
+
+        // Project the residual and Jacobians onto the nullspace of H_fj.
+        // svd of H_fj
+        SimpleMatrix U = Hfj.svd().getU();
+        SimpleMatrix A = U.cols(jacobianRowSize - 3, SimpleMatrix.END);
+
+        Hx.setTo(A.transpose().mult(Hxj));
+        r.setTo(A.transpose().mult(rj));
+    }
+
+    /**
+     * This function is used to compute the measurement Jacobian
+     * for a single feature observed at a single camera frame.
+     * Modifies Hx, Hf, r.
+     */
+    private void measurementJacobian(Integer camStateId, Feature feature, SimpleMatrix Hx, SimpleMatrix Hf, SimpleMatrix r) {
+        CamState camState = stateServer.camStates.get(camStateId);
+        assert(camState != null);
+
+        // Cam pose.
+        SimpleMatrix Rwc = SimpleMatrix.wrap(quaternionToRotation(camState.orientation));
+        SimpleMatrix tcw = SimpleMatrix.wrap(camState.position);
+
+        // 3d feature position in the world frame.
+        // And its observation with the stereo camera
+        assert(feature.isInitialized);
+        SimpleMatrix pw = feature.position;
+        SimpleMatrix z = SimpleMatrix.wrap(feature.observations.get(camStateId));
+
+        // Convert the feature position from the world frame to the cam frame.
+        SimpleMatrix pc = Rwc.mult(pw.minus(tcw));
+
+        // TODO: compare the MSCKF-S and MSCKF-M from here on?
+
+        double X = pc.get(0);
+        double Y = pc.get(1);
+        double Z = pc.get(2);
+
+        // Compute the Jacobians
+        SimpleMatrix Ji = new SimpleMatrix(new double[][]{
+                {1, 0, -X/Z},
+                {0, 1, -Y/Z}
+        }).divide(Z);
+
+        // Enforce observability constraint
+        SimpleMatrix A = new SimpleMatrix(2,6);
+        A.insertIntoThis(0,0,Ji.mult(skewSymmetric(pc)));
+        A.insertIntoThis(0,3, Ji
+                .negative()
+                .mult(SimpleMatrix.wrap(quaternionToRotation(camState.orientation)))); // TODO: I don't use orientation_null, since I'm following msckf_mono repo here. OK
+
+        SimpleMatrix u = new SimpleMatrix(6,1);
+        {
+            DMatrixRMaj buffer;
+            buffer = mult(quaternionToRotation(camState.orientation), ImuState.GRAVITY, null);
+            u.insertIntoThis(0,0, SimpleMatrix.wrap(buffer));
+
+            buffer = subtract(pw.getDDRM(), camState.position, null); // TODO: is it OK that I use position instead of position_null?
+            u.insertIntoThis(3,0, SimpleMatrix.wrap(
+                    mult(skewSymmetric(buffer), ImuState.GRAVITY, null)
+            ));
+        }
+        Hx.setTo(A.minus(
+                    A.mult(u).mult(
+                        u.transpose().mult(u))
+                    .invert().mult(
+                            u.transpose())));
+        Hf.setTo(Hx
+                .extractMatrix(0,SimpleMatrix.END,3,SimpleMatrix.END)
+                .negative());
+
+        // Compute the residual
+        r.setTo(z.minus(new SimpleMatrix(new double[]{
+                X / Z,
+                Y / Z
+        })));
+
+    }
 
 
     abstract void calcPrHAndRes();
@@ -580,8 +828,8 @@ public abstract class MsckfAbstract implements Msckf {
         SimpleMatrix omega = calcOmega(gyro);
 
         Quaternion q = stateServer.imuState.orientation;
-        SimpleMatrix v = SimpleMatrix.wrap(stateServer.imuState.velocity);
-        SimpleMatrix p = SimpleMatrix.wrap(stateServer.imuState.position);
+        SimpleMatrix v = stateServer.imuState.velocity;
+        SimpleMatrix p = stateServer.imuState.position;
 
         Quaternion dqDt, dqDt2;
         SimpleMatrix qVec = quaternionToVector(q);
@@ -659,3 +907,4 @@ public abstract class MsckfAbstract implements Msckf {
 
 
 }
+

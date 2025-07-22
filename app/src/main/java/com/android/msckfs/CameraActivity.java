@@ -1,9 +1,12 @@
 package com.android.msckfs;
 
+import static androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER;
+
 import android.Manifest;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
 import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -11,6 +14,8 @@ import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
 import androidx.camera.core.UseCase;
 import androidx.camera.core.UseCaseGroup;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
@@ -34,6 +39,10 @@ public class CameraActivity extends AppCompatActivity {
     private static final String TAG = "CameraActivity";
     protected ActivityFeatureTrackerBinding viewBinding; // TODO: XML-Name not generic
 
+    // Resolution.
+    protected final ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
+            .setResolutionStrategy(new ResolutionStrategy(new Size(640,480), FALLBACK_RULE_CLOSEST_LOWER))
+            .build();
 
 
     @Override
@@ -82,7 +91,7 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     protected UseCase getPreviewUseCase() {
-        Preview preview = new Preview.Builder().build();
+        Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).build();
         preview.setSurfaceProvider(viewBinding.viewFinder.getSurfaceProvider());
         return preview;
     }
