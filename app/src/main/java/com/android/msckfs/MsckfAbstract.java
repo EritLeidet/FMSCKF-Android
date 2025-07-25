@@ -35,16 +35,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * https://github.com/Edwinem/msckf_tutorial/blob/main/src/msckf.py
- * https://ejml.org/wiki/index.php?title=Example_Kalman_Filter
- * https://github.com/daniilidis-group/msckf_mono/blob/master/include/msckf_mono/msckf.h
- * // TODO: cite paper
+ * <a href="https://github.com/Edwinem/msckf_tutorial/blob/main/src/msckf.py">...</a>
+ * <a href="https://ejml.org/wiki/index.php?title=Example_Kalman_Filter">...</a>
+ * <a href="https://github.com/daniilidis-group/msckf_mono/blob/master/include/msckf_mono/msckf.h">...</a>
  */
 
 public abstract class MsckfAbstract implements Msckf {
 
 
-    // TODO: MSCKF State:mu_state cam_states imu_cov cam_cov imucam_cov =====
     private List<ImuMessage> imuBuffer; // TODO: initialize
 
     private StateServer stateServer;

@@ -51,7 +51,8 @@ import boofcv.struct.image.GrayU8;
  */
 public class FeatureTracker extends CameraActivity implements ImageAnalysis.Analyzer {
 
-    // TODO: RANSAC
+    // TODO: normalize keypoints, b4 passing them to MSCKF? Like in Tutorial? feature_tracker.get_current_normalized_keypoints_and_ids()
+    // TODO: RANSAC?
 
     // TODO: do you have to use imu as well, to help feature tracking?
     private static final String TAG = "FeatureTracker";

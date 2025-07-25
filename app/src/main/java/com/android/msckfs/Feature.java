@@ -16,6 +16,7 @@ import com.android.msckfs.utils.MathUtils;
 
 import org.apache.commons.collections4.map.LinkedMap;
 import org.ejml.data.DMatrixRMaj;
+import org.ejml.dense.row.NormOps_DDRM;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
 import org.ejml.interfaces.linsol.LinearSolver;
 import org.ejml.simple.SimpleMatrix;
@@ -32,9 +33,6 @@ import java.util.Map;
 public class Feature {
 
     public final int id;
-
-    // TODO: add observations to list.
-    // TODO: do observations get REMOVED? So that list doesn't grow infinitely?
 
     public boolean isInitialized = false;
 
@@ -53,6 +51,7 @@ public class Feature {
         this.id = id;
     }
 
+    @SuppressWarnings({"ConstantConditions", "BooleanMethodIsAlwaysInverted"}) // suppress false null pointer warnings
     public boolean checkMotion(Map<Integer, CamState> camStates) {
         if (observations.size() < 2) return false;
 
@@ -112,12 +111,10 @@ public class Feature {
 
      * @return True if the estimated 3d position of the feature is valid. (bool)
      */
+    @SuppressWarnings("ConstantConditions") // suppress unwanted null pointer warnings
     public boolean initializePosition(Map<Integer, CamState> camStates) {
         List<DMatrixRMaj> measurements = new ArrayList<>(observations.size());
         List<Isometry3D> camPoses = new ArrayList<>(observations.size());
-
-        // TODO: do I need to return when not enough observations?
-        // TODO: if I follow tutorial, the keypoints need to be normalized b4 this method.
 
         for (Map.Entry<Integer, DMatrixRMaj> observation : observations.entrySet()) {
             if (!camStates.containsKey(observation.getKey())) continue;
@@ -159,7 +156,7 @@ public class Feature {
         int innerLoopCount = 0;
         int outerLoopCount = 0;
         boolean isCostReduced = false;
-        double deltaNorm = 0; // TODO: is "inf" in Python
+        double deltaNorm = Double.POSITIVE_INFINITY;
 
         // Compute the initial cost.
         double totalCost = 0.0;
@@ -195,7 +192,7 @@ public class Feature {
                     denseSolver.solve(b.getDDRM(), delta);
                 }
                 DMatrixRMaj newSolution = subtract(solution, delta, null);
-                // TODO: deltaNorm = norm(delta); // TODO: which norm was it again?
+                deltaNorm = NormOps_DDRM.normF(delta);
 
                 double newCost = 0.0;
                 for (int i = 0; i < camPoses.size(); i++) {
@@ -250,7 +247,7 @@ public class Feature {
      *                 to ci frame. (Isometry3d.) Not modified.
      * @param x The current estimation. (vec3.) Not modified.
      * @param z The ith measurement of the feature j in ci frame. (vec2.) Not modified.
-     */ // TODO: complete documentation
+     **/
     private double calcJacobian(Isometry3D Tcci, DMatrixRMaj x, DMatrixRMaj z, SimpleMatrix J, SimpleMatrix r) {
         // Compute hi1, hi2, and hi3 as Equation (37).
         double alpha = x.get(0);
@@ -267,9 +264,8 @@ public class Feature {
 
         // Compute the Jacobian
         SimpleMatrix W = new SimpleMatrix(3,3);
-        W.setColumn(0, Tcci.R.getColumn(0));  // TODO: use insert instead
-        W.setColumn(1, Tcci.R.getColumn(1));
-        W.setColumn(2, Tcci.t);
+        W.insertIntoThis(0, 0, Tcci.R);
+        W.setColumn(2, Tcci.t); // Override third column
 
         J.zero();
         J.setRow(0, W.getRow(0).scale(1 / h3)
@@ -285,7 +281,7 @@ public class Feature {
         r.setTo(SimpleMatrix.wrap(subtract(zHat,z,null)));
 
         // Compute the weight based on the residual.
-        double e = 0; // TODO: norm() // TODO: which norm again?
+        double e = r.normF();
         if (e <= Config.HUBER_EPSILON) {
             return 1.0;
         } else {
@@ -297,7 +293,6 @@ public class Feature {
     }
 
 
-    // TODO: add "final" to more params?
     /**
      * Compute the cost of the camera observations
      * @param Tcci A rigid body transformation takes a vector in c0 frame to ci frame. (Isometry3d)
