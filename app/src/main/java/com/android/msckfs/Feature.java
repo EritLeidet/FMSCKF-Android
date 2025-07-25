@@ -6,11 +6,7 @@ import static org.ejml.dense.row.CommonOps_DDRM.add;
 import static org.ejml.dense.row.CommonOps_DDRM.elementMult;
 import static org.ejml.dense.row.CommonOps_DDRM.elementSum;
 import static org.ejml.dense.row.CommonOps_DDRM.identity;
-import static org.ejml.dense.row.CommonOps_DDRM.mult;
-import static org.ejml.dense.row.CommonOps_DDRM.scale;
-import static org.ejml.dense.row.CommonOps_DDRM.transpose;
 import static org.ejml.dense.row.CommonOps_DDRM.subtract;
-import static org.ejml.dense.row.NormOps_DDRM.normP2;
 
 
 import static java.lang.Double.max;
@@ -29,9 +25,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * https://github.com/Edwinem/msckf_tutorial/blob/main/src/msckf_types.py
- * https://github.com/rohiitb/msckf_vio_python/blob/main/feature.py
- * https://github.com/daniilidis-group/msckf_mono/blob/d51c9eef620b001a4a7014dd027fc0e2486b5cd6/include/msckf_mono/msckf.h#L1126
+ * <a href="https://github.com/Edwinem/msckf_tutorial/blob/main/src/msckf_typ<a href="es.py">...</a>
+ ">* https://github.com/rohiitb/msckf_vio_py<a href="thon/bl</a>ob/main/feature.py
+ ">* https://github.com/daniilidis-group/msckf_mono/blob/d51c9eef620b001a4a7014dd027fc0e2486b5cd6</a>/include/msckf_mono/msckf.h
  */
 public class Feature {
 
@@ -347,7 +343,7 @@ public class Feature {
     private DMatrixRMaj generateInitialGuess(Isometry3D Tc1c2, DMatrixRMaj z1, DMatrixRMaj z2) {
         // Construct a least square problem to solve the depth.
         SimpleMatrix m = Tc1c2.R.mult(new SimpleMatrix(new double[]{z1.get(0), z1.get(1), 1.0})); // vec3
-        
+
         SimpleMatrix A = SimpleMatrix.wrap(new DMatrixRMaj(new double[] {
                 m.get(0) - z2.get(0) * m.get(2),
                 m.get(1) - z2.get(1) * m.get(2),
