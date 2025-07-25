@@ -51,6 +51,8 @@ import boofcv.struct.image.GrayU8;
  */
 public class FeatureTracker extends CameraActivity implements ImageAnalysis.Analyzer {
 
+    // TODO: RANSAC
+
     // TODO: do you have to use imu as well, to help feature tracking?
     private static final String TAG = "FeatureTracker";
     private final List<PointTrack> active = new CopyOnWriteArrayList<>(); // TODO: if not used concurrently anymore, change back to a normal ArrayList for performance reasons.
@@ -173,11 +175,8 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
         private final Random rand = new Random();
         private List<Paint> paints;
 
-        private boolean firstDraw;
         public Visualizer() {
             paints = new ArrayList<>();
-
-            firstDraw = true;
 
             int[] colors = new int[] {
               Color.RED,

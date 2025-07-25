@@ -4,6 +4,7 @@ import static org.ejml.dense.row.CommonOps_DDRM.identity;
 import static org.ejml.dense.row.CommonOps_DDRM.insert;
 
 import org.ejml.data.DMatrixRMaj;
+import org.ejml.simple.SimpleMatrix;
 
 /**
  * 3d rigid transform.
@@ -11,18 +12,18 @@ import org.ejml.data.DMatrixRMaj;
  */
 public class Isometry3D {
 
-    public DMatrixRMaj R; // matrix
+    public SimpleMatrix R; // matrix
 
-    public DMatrixRMaj t; // vector
-    public Isometry3D(DMatrixRMaj R, DMatrixRMaj t) {
+    public SimpleMatrix t; // vector
+    public Isometry3D(SimpleMatrix R, SimpleMatrix t) {
         this.R = R;
         this.t = t;
     }
 
-    public DMatrixRMaj matrix() {
-        DMatrixRMaj m = identity(4);
-        insert(R, m, 0, 0);
-        insert(t, m, 0, 3);
+    public SimpleMatrix matrix() {
+        SimpleMatrix m = SimpleMatrix.identity(4);
+        m.insertIntoThis(0,0,R);
+        m.insertIntoThis(0,3,t);
         return m;
 
     }

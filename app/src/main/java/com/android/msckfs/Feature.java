@@ -6,7 +6,6 @@ import static org.ejml.dense.row.CommonOps_DDRM.add;
 import static org.ejml.dense.row.CommonOps_DDRM.elementMult;
 import static org.ejml.dense.row.CommonOps_DDRM.elementSum;
 import static org.ejml.dense.row.CommonOps_DDRM.identity;
-import static org.ejml.dense.row.CommonOps_DDRM.insert;
 import static org.ejml.dense.row.CommonOps_DDRM.mult;
 import static org.ejml.dense.row.CommonOps_DDRM.scale;
 import static org.ejml.dense.row.CommonOps_DDRM.transpose;
@@ -20,18 +19,12 @@ import static java.lang.Double.min;
 import com.android.msckfs.utils.MathUtils;
 
 import org.apache.commons.collections4.map.LinkedMap;
-import org.apache.commons.numbers.quaternion.Quaternion;
-import org.ddogleg.struct.Tuple2;
 import org.ejml.data.DMatrixRMaj;
-import org.ejml.dense.row.CommonOps_DDRM;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
 import org.ejml.interfaces.linsol.LinearSolver;
 import org.ejml.simple.SimpleMatrix;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -59,7 +52,7 @@ public class Feature {
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
 
     public SimpleMatrix position;
-    public Feature(int id, Integer cameraId) {
+    public Feature(int id) {
         this.observations = new LinkedMap<>();
         this.id = id;
     }
@@ -72,32 +65,30 @@ public class Feature {
 
 
         Isometry3D firstCamPose = new Isometry3D(
-                transpose(quaternionToRotation(camStates.get(firstId).orientation), null),
-                        camStates.get(firstId).position);
+                quaternionToRotation(camStates.get(firstId).orientation).transpose(),
+                camStates.get(firstId).position);
 
         Isometry3D lastCamPose = new Isometry3D(
-                transpose(quaternionToRotation(camStates.get(lastId).orientation), null),
+                quaternionToRotation(camStates.get(lastId).orientation).transpose(),
                 camStates.get(lastId).position);
 
         // Get the direction of the feature when it is first observed.
         // This direction is represented in the world frame.
-        DMatrixRMaj featureDirection = new DMatrixRMaj(new double[] {
+        SimpleMatrix featureDirection = new SimpleMatrix(new double[] {
                 observations.get(firstId).get(0), // x coordinate
                 observations.get(firstId).get(1), // y coordinate
                 1.0});
-        scale((1.0 / normP2(featureDirection)), featureDirection);
-        featureDirection = mult(firstCamPose.R, featureDirection, null);
+        featureDirection = featureDirection.divide(featureDirection.normF());
+        featureDirection = firstCamPose.R.mult(featureDirection);
 
         // Compute the translation between the first frame and the last frame.
         // We assume the first frame and the last frame will provide the
         // largest motion to speed up the checking process
-        DMatrixRMaj translation = subtract(lastCamPose.t, firstCamPose.t, null);
-        DMatrixRMaj parallel = mult(translation, featureDirection,null);
-        DMatrixRMaj orthogonalTranslation = subtract(
-                translation,
-                mult(parallel, featureDirection,null), null); // vector
+        SimpleMatrix translation = lastCamPose.t.minus(firstCamPose.t);
+        SimpleMatrix parallel = translation.mult(featureDirection);
+        SimpleMatrix orthogonalTranslation = translation.minus(parallel.mult(featureDirection)); // vector
 
-        return (normP2(orthogonalTranslation) > Config.TRANSLATION_THRESHOLD);
+        return (orthogonalTranslation.normF() > Config.TRANSLATION_THRESHOLD);
     }
 
     private static class Config {
@@ -141,7 +132,7 @@ public class Feature {
             // This camera pose will take a vector from this camera frame
             // to the world frame.
             Isometry3D camPose = new Isometry3D(
-                    transpose(quaternionToRotation(camState.orientation), null),
+                    quaternionToRotation(camState.orientation).transpose(),
                     camState.position);
             camPoses.add(camPose);
         }
@@ -233,7 +224,7 @@ public class Feature {
 
         // Covert the feature position from inverse depth
         // representation to its 3d coordinate.
-        DMatrixRMaj finalPosition = new DMatrixRMaj(new double[]{
+        SimpleMatrix finalPosition = new SimpleMatrix(new double[]{
                 solution.get(0) / solution.get(2),
                 solution.get(1) / solution.get(2),
                 1.0 / solution.get(2)});
@@ -242,8 +233,7 @@ public class Feature {
         // is in front of every camera frame observing it.
         boolean isValidSolution = true;
         for (Isometry3D pose : camPoses) {
-            DMatrixRMaj buffer = mult(pose.R, finalPosition, null);
-            add(buffer, pose.t, this.position);
+            this.position = pose.R.mult(finalPosition).plus(pose.t);
             if (this.position.get(2) <= 0) {
                 isValidSolution = false;
                 break;
@@ -251,10 +241,7 @@ public class Feature {
         }
 
         // Convert the feature position to the world frame.
-        {
-            DMatrixRMaj buffer = mult(Tc0w.R, finalPosition, null);
-            add(buffer, Tc0w.t, this.position);
-        }
+        this.position = Tc0w.R.mult(finalPosition).plus(Tc0w.t);
 
         this.isInitialized = isValidSolution;
         return isValidSolution;
@@ -274,19 +261,19 @@ public class Feature {
         double beta = x.get(1);
         double rho = x.get(2);
 
-        DMatrixRMaj h = add(
-                mult(Tcci.R, new DMatrixRMaj(new double[]{alpha, beta, 1.0}),null),
-                MathUtils.scale(rho, Tcci.t),
-                null);
+        SimpleMatrix h = Tcci.R
+                .mult(new SimpleMatrix(new double[]{alpha, beta, 1.0}))
+                .plus(Tcci.t.scale(rho));
+
         final double h1 = h.get(0);
         final double h2 = h.get(1);
         final double h3 = h.get(2);
 
         // Compute the Jacobian
         SimpleMatrix W = new SimpleMatrix(3,3);
-        W.setColumn(0, SimpleMatrix.wrap(Tcci.R).getColumn(0));  // TODO: use insert instead
-        W.setColumn(1, SimpleMatrix.wrap(Tcci.R).getColumn(1));
-        W.setColumn(2, SimpleMatrix.wrap(Tcci.t));
+        W.setColumn(0, Tcci.R.getColumn(0));  // TODO: use insert instead
+        W.setColumn(1, Tcci.R.getColumn(1));
+        W.setColumn(2, Tcci.t);
 
         J.zero();
         J.setRow(0, W.getRow(0).scale(1 / h3)
@@ -328,10 +315,9 @@ public class Feature {
         double beta = x.get(1);
         double rho = x.get(2);
 
-        DMatrixRMaj h = add(
-                mult(Tcci.R, new DMatrixRMaj(new double[]{alpha, beta, 1.0}),null),
-                MathUtils.scale(rho, Tcci.t),
-                null);
+        SimpleMatrix h = Tcci.R
+                .mult(new SimpleMatrix(new double[]{alpha, beta, 1.0}))
+                .plus(Tcci.t.scale(rho));
 
         // Predict the feature observation in ci frame.
         DMatrixRMaj zHat = new DMatrixRMaj(new double[]{
@@ -360,11 +346,8 @@ public class Feature {
      */
     private DMatrixRMaj generateInitialGuess(Isometry3D Tc1c2, DMatrixRMaj z1, DMatrixRMaj z2) {
         // Construct a least square problem to solve the depth.
-        DMatrixRMaj m = mult(
-                Tc1c2.R,
-                new DMatrixRMaj(new double[]{z1.get(0), z1.get(1), 1.0}),
-                null); // vec3
-
+        SimpleMatrix m = Tc1c2.R.mult(new SimpleMatrix(new double[]{z1.get(0), z1.get(1), 1.0})); // vec3
+        
         SimpleMatrix A = SimpleMatrix.wrap(new DMatrixRMaj(new double[] {
                 m.get(0) - z2.get(0) * m.get(2),
                 m.get(1) - z2.get(1) * m.get(2),

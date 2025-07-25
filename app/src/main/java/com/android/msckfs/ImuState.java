@@ -1,7 +1,4 @@
 package com.android.msckfs;
-
-import org.apache.commons.numbers.quaternion.Quaternion;
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 /**
@@ -27,7 +24,7 @@ public class ImuState extends State {
 
     //public final static Vector gravity;
 
-    public Quaternion orientation;
+    public SimpleMatrix orientation; // Quaternion
 
     public SimpleMatrix gyroBias = new SimpleMatrix(3,1);
     public SimpleMatrix accBias = new SimpleMatrix(3,1);
@@ -36,7 +33,7 @@ public class ImuState extends State {
     public SimpleMatrix velocity = new SimpleMatrix(3,1);
     public SimpleMatrix position = new SimpleMatrix(3,1);
 
-    public static final DMatrixRMaj GRAVITY = new DMatrixRMaj(new double[]{0,0,-9.81});
+    public static final SimpleMatrix GRAVITY = new SimpleMatrix(new double[]{0,0,-9.81});
 
     public static int nextId; //TODO: initialize? // TODO: what this for?
     public ImuState(int id, long timestamp) {
