@@ -1,28 +1,7 @@
-package com.android.msckfs;
+package com.android.msckfs.imageProcessing;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import boofcv.abst.feature.detect.interest.ConfigGeneralDetector;
 import boofcv.abst.feature.detect.interest.ConfigHarrisCorner;
-import boofcv.abst.feature.detect.interest.ConfigPointDetector;
-import boofcv.abst.feature.detect.interest.PointDetectorTypes;
-import boofcv.abst.tracker.PointTrack;
-import boofcv.abst.tracker.PointTracker;
-import boofcv.alg.distort.LensDistortionNarrowFOV;
-import boofcv.alg.distort.brown.LensDistortionBrown;
-import boofcv.alg.feature.detect.interest.GeneralFeatureDetector;
-import boofcv.alg.sfm.d3.VisOdomDualTrackPnP;
-import boofcv.alg.tracker.klt.ConfigPKlt;
-import boofcv.factory.feature.detect.interest.FactoryDetectPoint;
-import boofcv.factory.feature.detect.interest.FactoryInterestPoint;
-import boofcv.factory.tracker.FactoryPointTracker;
 import boofcv.struct.calib.CameraPinholeBrown;
-import boofcv.struct.distort.Point2Transform2_F64;
-import boofcv.struct.image.GrayU8;
-import boofcv.struct.image.ImageBase;
-import boofcv.struct.image.ImageGray;
-import georegression.struct.point.Point2D_F64;
 
 // Pro tip: Run in app fast or release mode for a dramatic speed up!
 // In Android Studio expand "Build Variants" tab on left.

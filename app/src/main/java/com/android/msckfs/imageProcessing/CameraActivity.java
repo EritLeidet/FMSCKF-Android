@@ -1,13 +1,11 @@
-package com.android.msckfs;
+package com.android.msckfs.imageProcessing;
 
 import static androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER;
 
 import android.Manifest;
-import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
-import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
@@ -17,18 +15,13 @@ import androidx.camera.core.UseCaseGroup;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.LifecycleOwner;
 
 import com.android.msckfs.databinding.ActivityFeatureTrackerBinding;
-import com.android.msckfs.databinding.ActivityMainBinding;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Source code based on:

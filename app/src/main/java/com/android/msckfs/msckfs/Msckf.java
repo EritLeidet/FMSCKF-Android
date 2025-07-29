@@ -1,4 +1,4 @@
-package com.android.msckfs;
+package com.android.msckfs.msckfs;
 import static com.android.msckfs.utils.MathUtils.deleteColumns;
 import static com.android.msckfs.utils.MathUtils.deletedRows;
 import static com.android.msckfs.utils.MathUtils.quaternionMultiplication;
@@ -14,12 +14,17 @@ import static org.ejml.dense.row.CommonOps_DDRM.mult;
 import static org.ejml.dense.row.CommonOps_DDRM.scale;
 import static org.ejml.dense.row.CommonOps_DDRM.setIdentity;
 import static org.ejml.dense.row.CommonOps_DDRM.transpose;
-import static org.ejml.dense.row.NormOps_DDRM.normP2;
 
 import static java.lang.Math.cos;
 import static java.lang.Math.pow;
 import static java.lang.Math.sin;
 
+import com.android.msckfs.imageProcessing.FeatureMessage;
+import com.android.msckfs.imuProcessing.ImuMessage;
+import com.android.msckfs.imageProcessing.FeatureMeasurement;
+import com.android.msckfs.utils.Isometry3D;
+
+import org.apache.commons.statistics.distribution.ChiSquaredDistribution;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.data.DMatrixSparseCSC;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
@@ -30,6 +35,8 @@ import org.ejml.sparse.FillReducing;
 import org.ejml.sparse.csc.factory.DecompositionFactory_DSCC;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -40,42 +47,59 @@ import java.util.Map;
  * <a href="https://github.com/daniilidis-group/msckf_mono/blob/master/include/msckf_mono/msckf.h">...</a>
  */
 
-public abstract class MsckfAbstract implements Msckf {
+public abstract class Msckf {
 
 
-    private List<ImuMessage> imuBuffer; // TODO: initialize
+    private final List<ImuMessage> imuBuffer = Collections.synchronizedList(new LinkedList<>());
 
-    private StateServer stateServer;
+    private final StateServer stateServer = new StateServer();
+
 
 
     private final DMatrixRMaj F, G;
 
 
+    private DMatrixRMaj g;
+    private final DMatrixRMaj Fdt = new DMatrixRMaj(), FdtSquare = new DMatrixRMaj(), FdtCube = new DMatrixRMaj();
 
-    // Matrix calculation buffers
-    private DMatrixRMaj f, g;
-    private final DMatrixRMaj Fdt = null, FdtSquare = null, FdtCube = null; // TODO: initialize
+    private final Map<Integer,Double> chiSquaredTestTable = new HashMap<>();
+    
+    public Msckf() {
+        assert(!denseSolver.modifiesB());
 
-    public MsckfAbstract() {
-        F = new DMatrixRMaj(15,15);
-        G = new DMatrixRMaj(15,12);
+        F = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,StateInfo.IMU_STATE_SIZE);
+        G = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,12); // TODO: 12 columns in C++, but 21 in Python?
 
+        SimpleMatrix continuousNoiseCov = new SimpleMatrix(12,12);
+        continuousNoiseCov.insertIntoThis(0,0, SimpleMatrix.identity(3).scale(Config.gyroNoise));
+        continuousNoiseCov.insertIntoThis(3,3, SimpleMatrix.identity(3).scale(Config.gyroBiasNoise));
+        continuousNoiseCov.insertIntoThis(6,6, SimpleMatrix.identity(3).scale(Config.accNoise));
+        continuousNoiseCov.insertIntoThis(9,9, SimpleMatrix.identity(3).scale(Config.accBiasNoise));
+        stateServer.continuousNoiseCov = continuousNoiseCov;
 
+        // Initialize the chi squared test table with confidence
+        // level 0.95.
+        for (int i = 1; i<100; i++) {
+            ChiSquaredDistribution chiSquaredDist = ChiSquaredDistribution.of(i);
+            chiSquaredTestTable.put(i, chiSquaredDist.inverseCumulativeProbability(0.05));
+
+        }
+
+        // TODO ... weitere Initialisierung
 
     }
 
-    // TODO: calcF and calcG have differently placed submatrices in MSCKF tutorial vs. official MSCKF-S impl.
-        // In suspect that's bc. each 3x3 stands for a diff. attribute (pos, vel, att, bias, ...), the positions of which are interchangable, as long as constistent
     /**
      * Computes the transition matrix F for the EKF.
      * The transition matrix contains the jacobians of our process model with respect to our current state.
      */
-    public void calcF(DMatrixRMaj gyro, DMatrixRMaj acc) {
+    public void calcF(SimpleMatrix gyro, SimpleMatrix acc) {
         F.zero();
 
         // f = -skew(gyro)
-        f = skewSymmetric(gyro);
-        scale(-1,f);
+        // Matrix calculation buffers
+        DMatrixRMaj f = skewSymmetric(gyro).getDDRM();
+        scale(-1, f);
         insert(f,F,0,0);
 
         // f = eye(3)
@@ -83,21 +107,20 @@ public abstract class MsckfAbstract implements Msckf {
         insert(f,F,12,6);
 
         // f = -eye(3)
-        scale(-1,f);
+        scale(-1, f);
         insert(f,F,0,3);
 
         // f = -to_rotation(imu_state.orientation).T
         f = quaternionToRotation(stateServer.imuState.orientation.getDDRM());
         transpose(f);
-        scale(-1,f);
+        scale(-1, f);
         insert(f,F,6,9);
 
         // f = -to_rotation(imu_state.orientation).T * skew(acc)
-        f = mult(f,skewSymmetric(acc), new DMatrixRMaj());
+        f = mult(f,skewSymmetric(acc.getDDRM()), new DMatrixRMaj());
         insert(f,F,6,0);
 
-        // TODO: F in MSCKF-S Python does not look like in Paper? smth. should be at 6-6? AND 6--12?
-
+        // TODO:
     }
 
     /**
@@ -126,30 +149,47 @@ public abstract class MsckfAbstract implements Msckf {
 
 
     private static class Config {
-        static final int IMU_STATE_SIZE = 15; // TODO: why in tutorial sometimes hardcoded, sometimes not?
-
         static final double OBSERVATION_NOISE = pow(0.035d, 2);
         static final int MAX_CAM_STATES = 20;
-        static final int MIN_TRACK_LENGTH_FOR_UPDATE = 3;
+
+        // Noise related parameters (Use variance instead of standard deviation)
+
+        static final double gyroNoise = pow(0.005, 2);
+        static final double accNoise = pow(0.05,2);
+        static final double gyroBiasNoise = pow(0.001,2);
+        static final double accBiasNoise = pow(0.01,2);
+        static final double observationNoise = pow(0.035,2);
+
+
     }
 
-    abstract void featuresLocalization();
+    private static class StateInfo {
+        static final int IMU_STATE_SIZE = 21;
+        static final int CAM_STATE_SIZE = 6;
 
+    }
 
-    // TODO: call for every ImuMessage in buffer, like in Python tutorial?
+    private int getStateSize() {
+        return StateInfo.IMU_STATE_SIZE + stateServer.camStates.size() * StateInfo.CAM_STATE_SIZE;
+    }
+
+    // TODO: Covariance zu Size 21 und alle Zugriffe ändern
+
     /**
      *
      */
-    public void processModel(double time, DMatrixRMaj mGyro, DMatrixRMaj mAcc) {
+    public void processModel(double time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
 
+        // TODO: there's a lot of stuff missing in this method ...
         ImuState imuState = stateServer.imuState;
+
+        SimpleMatrix gyro = mGyro.minus(imuState.gyroBias);
+        SimpleMatrix acc = mAcc.minus(imuState.accBias);
         double dt = time - imuState.timestamp;
 
-        // TODO: remove gyro/acc bias, line in MSCKF-S?
-
-        // TODO: calcF(imu.angularVelocity, imu.linearAcceleration);
+        // Compute discrete transition F, G matrices in Appendix A in "MSCKF" paper
+        calcF(gyro, acc);
         calcG();
-        integrate(0, null, null); // TODO: input params
 
         // Approximate matrix exponential to the 3rd order, which can be
         // considered to be accurate enough assuming dt is within 0.01s
@@ -159,48 +199,63 @@ public abstract class MsckfAbstract implements Msckf {
 
         // Phi = np.eye(21) + Fdt + 0.5*Fdt_square + (1./6.)*Fdt_cube
         SimpleMatrix Phi = SimpleMatrix
-                .identity(15)
+                .identity(StateInfo.IMU_STATE_SIZE)
                 .plus(SimpleMatrix.wrap(Fdt))
                 .plus(SimpleMatrix.wrap(FdtSquare).scale(0.5))
                 .plus(SimpleMatrix.wrap(FdtCube).scale(1./6.))
                 .getMatrix();
 
+        // Propogate the state using 4th order Runge-Kutta
+        predictNewState(dt, gyro, acc);
+
+        // Modify the transition matrix
+        SimpleMatrix Rkk1 = quaternionToRotation(imuState.orientationNull);
+        Phi.insertIntoThis(0,0, quaternionToRotation(imuState.orientation).mult(Rkk1.transpose()));
+        SimpleMatrix u = Rkk1.mult(ImuState.GRAVITY);
+        SimpleMatrix s = (u.transpose().mult(u)).invert().mult(u.transpose()); // TODO: in C++ ist das hier ein row vec, in Python nciht?
+        SimpleMatrix A1 = Phi.extractMatrix(6,9,0,3);
+        SimpleMatrix w1 = skewSymmetric(imuState.velocityNull.minus(imuState.velocity)).mult(ImuState.GRAVITY);
+        Phi.insertIntoThis(6,0,A1.minus(A1.mult(u).minus(w1)).mult(s));
+        SimpleMatrix A2 = Phi.extractMatrix(12,15,0,3);
+        SimpleMatrix w2 = skewSymmetric(imuState.velocityNull.scale(dt).plus(imuState.positionNull).minus(imuState.position))
+                .mult(ImuState.GRAVITY);
+        Phi.insertIntoThis(12,0, A2.minus(A2.mult(u).minus(w2)).mult(s));
+
         // Propogate the state covariance matrix.
         SimpleMatrix Gwrapped = SimpleMatrix.wrap(G); // TODO: maybe change F and G to SimpleMatrix?
-        SimpleMatrix FWrapped = SimpleMatrix.wrap(G);
+        SimpleMatrix FWrapped = SimpleMatrix.wrap(F);
         SimpleMatrix Q = Phi
                 .mult(Gwrapped)
-                .mult(stateServer.covariance)
+                .mult(stateServer.continuousNoiseCov) // TODO: there's a difference between state_cov and continuous_noise_cov. Inspect all usages for errors?
                 .mult(Gwrapped.transpose())
                 .mult(Phi.transpose())
                 .scale(dt);
+        stateServer.stateCov.insertIntoThis(0,0, Phi.mult(stateServer.stateCov).mult(Phi.transpose()).plus(Q));
 
-        // TODO: add observability constraints?
-
-        // TODO: if len(self.state_server.cam_states) > 0:
-
-        // Update the imu-camera covariance
-        stateServer.covariance.setColumn(15,Phi.mult(stateServer.covariance.getColumn(15)));
-        stateServer.covariance.setRow(15, stateServer.covariance.getRow(15).mult(Phi.transpose()));
+        if (!stateServer.camStates.isEmpty()) {
+            stateServer.stateCov.insertIntoThis(0, StateInfo.IMU_STATE_SIZE, Phi.mult(
+                    stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,StateInfo.IMU_STATE_SIZE,SimpleMatrix.END)));
+            stateServer.stateCov.insertIntoThis(StateInfo.IMU_STATE_SIZE,0,
+                    stateServer.stateCov.extractMatrix(StateInfo.IMU_STATE_SIZE,SimpleMatrix.END,0,StateInfo.IMU_STATE_SIZE).mult(Phi.transpose()));
+        }
 
         // Fix the covariance to be symmetric
-        stateServer.covariance = stateServer.covariance.plus(stateServer.covariance.transpose()).scale(0.5);
+        stateServer.stateCov = stateServer.stateCov.plus(stateServer.stateCov.transpose()).scale(0.5);
 
 
         // Update the state correspondes to null space.
-        // TODO?: stateServer.imuState.orientationNull
+        stateServer.imuState.orientationNull = imuState.orientation;
+        stateServer.imuState.positionNull = imuState.position;
+        stateServer.imuState.velocityNull = imuState.velocity;
     }
 
     public void imuCallback(ImuMessage imuMsg) {
         imuBuffer.add(imuMsg);
-
-        // TODO: (only) MSCKF-S has additional function here that initializes gravity
     }
 
     private boolean isFirstImage = true;
     public void featureCallback(FeatureMessage featureMsg) {
 
-        // TODO: Tutorial does something else when "first time"?
         if (isFirstImage) {
             isFirstImage = false;
             stateServer.imuState.timestamp = featureMsg.timestamp;
@@ -217,7 +272,6 @@ public abstract class MsckfAbstract implements Msckf {
         // in the map server.
         addFeatureObservations(featureMsg);
 
-        // TODO: what is tutorial equivalent for MSCKF-S remove_lost_features and prune_cam_
         // Perform measurement update if necessary.
         // And prune features
         removeLostFeatures();
@@ -225,8 +279,27 @@ public abstract class MsckfAbstract implements Msckf {
         // Prune camera states.
         removeOldCamStates();
 
-        // TODO: ...
+        // Publish the odometry.
+        publish(featureMsg.timestamp);
 
+    }
+
+
+
+    private void publish(double time) {
+        ImuState imuState = stateServer.imuState;
+
+        Isometry3D Tiw = new Isometry3D(
+                quaternionToRotation(imuState.orientation).transpose(),
+                imuState.position);
+        Isometry3D Tbw = ImuState.tImuBody.mult(Tiw).mult(ImuState.tImuBody.inverse());
+        SimpleMatrix bodyVelocity = ImuState.tImuBody.R.mult(imuState.velocity);
+
+        SimpleMatrix Rwc = imuState.rImuCam.mult(Tiw.R.transpose());
+        SimpleMatrix tcw = imuState.position.plus(Tiw.R.mult(imuState.tCamImu));
+        Isometry3D Tcw = new Isometry3D(Rwc.transpose(), tcw);
+
+        Odometry odom = new Odometry(time, Tbw, bodyVelocity, Tcw);
     }
 
     private void addFeatureObservations(FeatureMessage featureMsg) {
@@ -252,8 +325,6 @@ public abstract class MsckfAbstract implements Msckf {
      * Basic sliding window which removes the oldest camera states from our state vector.
      */
     private void removeOldCamStates() {
-        // TODO: is it possible to only remove a singular CamState inside this method? Why (not)?
-
         if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
 
         // Find two camera states to be removed. Here we choose the oldest two. (Sorted ascending by ID.)
@@ -275,7 +346,7 @@ public abstract class MsckfAbstract implements Msckf {
                 continue;
             }
 
-            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
+            if (!feature.isInitialized) {
                 // Ensure there is enough translation to triangulate the feature
                 if (!feature.checkMotion(stateServer.camStates)) {
                     // If the feature cannot be initialized, just remove
@@ -296,13 +367,13 @@ public abstract class MsckfAbstract implements Msckf {
                     continue;
                 }
             }
-            jacobianRowSize += 2 * involvedCamStateIds.size() - 3; // TODO: Why is it calculated like this, esp. if Hxj.rows == 3? And why can't you just have one involvedCamState?
+            jacobianRowSize += 2 * involvedCamStateIds.size() - 3;
         }
 
-        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, 15 + 6 * stateServer.camStates.size());
+        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
         int stackCount = 0;
-        SimpleMatrix Hxj = new SimpleMatrix(3,15 + 6 * stateServer.camStates.size()); // TODO: set sizes
+        SimpleMatrix Hxj = new SimpleMatrix(3,getStateSize());
         SimpleMatrix rj = new SimpleMatrix(3,1);
 
 
@@ -335,7 +406,7 @@ public abstract class MsckfAbstract implements Msckf {
 
         for (Integer camId : rmCamStateIds) {
             int idx = stateServer.camStates.indexOf(camId);
-            int camStateStart = 15 + 6*idx;
+            int camStateStart = StateInfo.IMU_STATE_SIZE + StateInfo.CAM_STATE_SIZE*idx;
             int camStateEnd = camStateStart + 6;
 
             // Remove the corresponding rows and columns in the state
@@ -348,62 +419,6 @@ public abstract class MsckfAbstract implements Msckf {
             stateServer.camStates.remove(camId);
         }
     }
-
-    /**
-     *
-     * The main purpose of this function is to validate the tracks for the measurement update.
-     */
-    /*
-    private void msckfUpdate(List<Feature> features) {
-        // TODO: compare msckf_update/update_with_good_ids (tutorial) with remove_lost_features/prune_cam_state_buffer (MSCKF-S Python)
-
-        if (features.isEmpty()) return;
-
-        List<Feature> validatedFeatures = new LinkedList<>();
-        // TODO: Logging like in tutorial?
-
-        for (Feature feature : features) {
-
-            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
-
-                // Ensure there is enough translation to triangulate the feature
-                if (!feature.checkMotion(stateServer.camStates)) {
-                    // If the feature cannot be initialized, just remove
-                    // the observations associated with the camera states
-                    // to be removed.
-
-                    continue;
-                }
-
-                // Intialize the feature position based on all current available measurements.
-                boolean ret = feature.initializePosition(stateServer.camStates);
-                if (!ret) {
-                    continue;
-                }
-            }
-            validatedFeatures.add(feature);
-            // TODO: ..
-        }
-        // TODO: (skipped some stuff from prune_cam_state_buffer here)
-
-
-        updateWithValidatedFeatures(validatedFeatures);
-
-        // TODO: remove the processed features from the map: here or somewhere else?
-        for (Feature feature : validatedFeatures) {
-            stateServer.mapServer.remove(feature.id); // TODO: I think the features themselves should only be deleted in remove_lost_features.
-        }
-
-        // TODO: is there even a situation where a feature gets initialized and not get removed right away? I mean, you have to reuse features to track position, right?
-
-
-
-    }
-
-
-    // TODO: validatedFeatures Should only contain tracks that have gone through some sort of preprocessing to remove outliers. // TODO: RANSAC?
-     */
-
 
 
     private void removeLostFeatures() {
@@ -452,10 +467,10 @@ public abstract class MsckfAbstract implements Msckf {
         // Return if there is no lost feature to be processed.
         if (processedFeatures.isEmpty()) return;
 
-        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, 15 + 6 * stateServer.camStates.size());
+        SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
         int stackCount = 0;
-        SimpleMatrix Hxj = new SimpleMatrix(3,15 + 6 * stateServer.camStates.size()); // TODO: set sizes
+        SimpleMatrix Hxj = new SimpleMatrix(3,getStateSize());
         SimpleMatrix rj = new SimpleMatrix(3,1);
 
         // Process the features which lose track.
@@ -488,7 +503,9 @@ public abstract class MsckfAbstract implements Msckf {
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
     //private final LinearSolver<DMatrixSparseCSC,DMatrixRMaj> sparseSolver = LinearSolverFactory_DSCC.qr(FillReducing.NONE);
     private final DMatrixRMaj A = null, X = null; // TODO: initialize
-    private boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) { // TODO: doch nicht SimpleMatrix?
+
+    @SuppressWarnings("ConstantConditions") // suppress unwanted null pointer warnings
+    private boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) {
         DMatrixRMaj P1 = H.mult(stateServer.covariance).mult(H.transpose()).getDDRM();
         DMatrixRMaj P2 = SimpleMatrix.identity(H.getNumRows()).scale(Config.OBSERVATION_NOISE).getDDRM();
         add(P1,P2,A);
@@ -496,25 +513,22 @@ public abstract class MsckfAbstract implements Msckf {
         // Solve linear system
         denseSolver.setA(A);
         denseSolver.solve(r.getDDRM(), X); // X is a column vector
-        assert(!denseSolver.modifiesB()); // TODO: move assert to constructor.
-        double gamma = r.transpose().dot(SimpleMatrix.wrap(X));
-        // TODO: are there other calculations with vectors where a different type of calculation (e.g. dot product instead of matrix product) was required?
 
-        // TODO: ...
-        return false; // TODO!
+        double gamma = r.transpose().dot(SimpleMatrix.wrap(X));
+
+        return gamma < chiSquaredTestTable.get(dof);
     }
 
     private void batchImuProcessing(double timeBound) {
         int usedImuMsgCt = 0;
 
-        // TODO: Synchronisierung imuBuffer?
         for (ImuMessage imuMsg : imuBuffer) {
             if (imuMsg.timestamp < stateServer.imuState.timestamp) {
                 usedImuMsgCt++;
                 continue;
             }
             if (imuMsg.timestamp > timeBound) break;
-            processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
+            processModel(imuMsg.timestamp, new SimpleMatrix(imuMsg.angularVelocity), new SimpleMatrix(imuMsg.linearAcceleration));
             usedImuMsgCt++;
         }
 
@@ -526,7 +540,7 @@ public abstract class MsckfAbstract implements Msckf {
 
     }
 
-    private final DMatrixRMaj J = null; // TODO: initialize
+    private final DMatrixRMaj J = new DMatrixRMaj(StateInfo.CAM_STATE_SIZE, StateInfo.IMU_STATE_SIZE);
 
     /**
      * Generates a new camera state and adds it to the full state and covariance.
@@ -556,7 +570,7 @@ public abstract class MsckfAbstract implements Msckf {
         insert(Rwi.transpose().getDDRM(),J,3,18);
 
         // Resize the state covariance matrix.
-        int oldSize = stateServer.covariance.getNumRows();
+        int oldSize = stateServer.stateCov.getNumRows();
         int newSize = oldSize + 6;
         SimpleMatrix augmentationMatrix = SimpleMatrix.wrap(identity(newSize,oldSize));
         augmentationMatrix.insertIntoThis(oldSize,0,SimpleMatrix.wrap(J));
@@ -589,7 +603,8 @@ public abstract class MsckfAbstract implements Msckf {
      * Update the state vector given a deltaX computed from a measurement update.
      */
     public void measurementUpdate(SimpleMatrix H, SimpleMatrix r) {
-        // TODO:  Check if H and r are empty?
+        // Check if H and r are empty
+        if (H.getNumElements() == 0 || r.getNumElements() == 0) return;
 
         // Decompose the final Jacobian matrix to reduce computational complexity.
         SimpleMatrix Hthin, rThin;
@@ -617,7 +632,7 @@ public abstract class MsckfAbstract implements Msckf {
         // Compute the Kalman gain:
 
         // P
-        SimpleMatrix P = stateServer.covariance;
+        SimpleMatrix P = stateServer.stateCov;
 
         // S
         SimpleMatrix S = SimpleMatrix
@@ -638,11 +653,11 @@ public abstract class MsckfAbstract implements Msckf {
         }
 
         // Compute the error of the state
-        SimpleMatrix deltaX = K.mult(rThin);
+        SimpleMatrix deltaX = K.mult(rThin); // vector
 
         // Update the IMU state.
-        SimpleMatrix deltaXimu = deltaX.rows(0,15); // TODO: is 15 correct? In general, but also with rows() specifically, or do I need 15+1
-        SimpleMatrix dqImu = smallAngleQuaternion(deltaXimu.rows(0,3)); // TODO: same question here ^^
+        SimpleMatrix deltaXimu = deltaX.rows(0,StateInfo.IMU_STATE_SIZE);
+        SimpleMatrix dqImu = smallAngleQuaternion(deltaXimu.rows(0,3));
 
         ImuState imuState = stateServer.imuState;
         imuState.orientation = quaternionMultiplication(dqImu, imuState.orientation);
@@ -650,16 +665,20 @@ public abstract class MsckfAbstract implements Msckf {
         imuState.velocity = imuState.velocity.plus(deltaXimu.rows(6,9));
         imuState.accBias = imuState.accBias.plus(deltaXimu.rows(9,12));
         imuState.position = imuState.position.plus(deltaXimu.rows(12,15));
-        // TODO: dq_extrinsic = small_angle_quaternion(delta_x_imu[15:18])
-        // TODO: what do I do, since mine only size 15? Is it even supposed to be 15?
+        SimpleMatrix dqExtrinsic = smallAngleQuaternion(deltaXimu.rows(15,18));
+        stateServer.imuState.rImuCam = quaternionToRotation(dqExtrinsic).mult(stateServer.imuState.rImuCam);
+        stateServer.imuState.tCamImu = stateServer.imuState.tCamImu.plus(deltaXimu.rows(18,StateInfo.IMU_STATE_SIZE));
 
-        // TODO: ...
+
+        // Update the camera states.
         for (Map.Entry<Integer,CamState> entry : stateServer.camStates.entrySet()) {
             CamState camState = entry.getValue();
-            SimpleMatrix deltaXcam = deltaX.rows(15 + entry.getKey() * 6, 21 + entry.getKey() * 6); // TODO: are these coords accurate for mono? Where does the 27 in MSCKF-S here come from? Smth. about 21+6?
+            SimpleMatrix deltaXcam = deltaX.rows(
+                    StateInfo.IMU_STATE_SIZE + entry.getKey() * StateInfo.CAM_STATE_SIZE,
+                    (StateInfo.IMU_STATE_SIZE + StateInfo.CAM_STATE_SIZE) + (entry.getKey() * StateInfo.CAM_STATE_SIZE));
             SimpleMatrix dqCam = smallAngleQuaternion(deltaXcam.rows(0,3));
             camState.orientation = quaternionMultiplication(dqCam, camState.orientation);
-            camState.position = camState.position.plus(deltaXcam.rows(3,deltaXcam.getNumRows()));
+            camState.position = camState.position.plus(deltaXcam.rows(3,SimpleMatrix.END));
         }
 
         // Update state covariance
@@ -667,11 +686,10 @@ public abstract class MsckfAbstract implements Msckf {
                 .identity(K.getNumRows())
                 .minus(
                     K.mult(Hthin));
-        SimpleMatrix stateCov = IKH.mult(stateServer.covariance);
+        SimpleMatrix stateCov = IKH.mult(stateServer.stateCov);
 
         // Fix the covariance to be symmetric
-        stateServer.covariance = stateCov.plus(stateCov.transpose()).scale(0.5);
-
+        stateServer.stateCov = stateCov.plus(stateCov.transpose()).scale(0.5);
     }
 
 
@@ -681,7 +699,7 @@ public abstract class MsckfAbstract implements Msckf {
      */
     private void featureJacobian(Feature feature, List<Integer> camStateIds, SimpleMatrix Hx, SimpleMatrix r) {
         int jacobianRowSize = 2 * camStateIds.size();
-        SimpleMatrix Hxj = new SimpleMatrix(jacobianRowSize, 15 + stateServer.camStates.size() * 6);
+        SimpleMatrix Hxj = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix Hfj = new SimpleMatrix(jacobianRowSize, 3);
         SimpleMatrix rj = new SimpleMatrix(jacobianRowSize,1);
 
@@ -695,7 +713,7 @@ public abstract class MsckfAbstract implements Msckf {
 
             // Stack the Jacobians.
             int idx = stateServer.camStates.indexOf(camId);
-            Hxj.insertIntoThis(stackCount, 15 + 6 * idx, Hxi);
+            Hxj.insertIntoThis(stackCount, StateInfo.IMU_STATE_SIZE + StateInfo.CAM_STATE_SIZE * idx, Hxi);
             Hfj.insertIntoThis(stackCount,0,Hfi);
             rj.insertIntoThis(stackCount,0,ri);
             stackCount += 2;
@@ -715,6 +733,7 @@ public abstract class MsckfAbstract implements Msckf {
      * for a single feature observed at a single camera frame.
      * Modifies Hx, Hf, r.
      */
+    @SuppressWarnings("UnnecessaryLocalVariable")
     private void measurementJacobian(Integer camStateId, Feature feature, SimpleMatrix Hx, SimpleMatrix Hf, SimpleMatrix r) {
         CamState camState = stateServer.camStates.get(camStateId);
         assert(camState != null);
@@ -732,28 +751,27 @@ public abstract class MsckfAbstract implements Msckf {
         // Convert the feature position from the world frame to the cam frame.
         SimpleMatrix pc = Rwc.mult(pw.minus(tcw));
 
-        // TODO: compare the MSCKF-S and MSCKF-M from here on?
+        // Compute the Jacobians.
+        SimpleMatrix dzDpc = new SimpleMatrix(2,3);
+        dzDpc.set(0,0, 1/pc.get(2));
+        dzDpc.set(1,1, 1/pc.get(2));
+        dzDpc.set(0,2, -pc.get(0) / (pc.get(2) * pc.get(2)));
+        dzDpc.set(1,2, -pc.get(1) / (pc.get(2) * pc.get(2)));
 
-        double X = pc.get(0);
-        double Y = pc.get(1);
-        double Z = pc.get(2);
+        SimpleMatrix dpcDxc = new SimpleMatrix(3,6);
+        dpcDxc.insertIntoThis(0,0, skewSymmetric(pc));
+        dpcDxc.insertIntoThis(0,3, Rwc.negative());
 
-        // Compute the Jacobians
-        SimpleMatrix Ji = new SimpleMatrix(new double[][]{
-                {1, 0, -X/Z},
-                {0, 1, -Y/Z}
-        }).divide(Z);
+        SimpleMatrix dpcDpg = Rwc;
 
-        // Enforce observability constraint
-        SimpleMatrix A = new SimpleMatrix(2,6);
-        A.insertIntoThis(0,0,Ji.mult(skewSymmetric(pc)));
-        A.insertIntoThis(0,3, Ji
-                .negative()
-                .mult(quaternionToRotation(camState.orientation))); // TODO: I don't use orientation_null, since I'm following msckf_mono repo here. OK
+        Hx.setTo(dzDpc.mult(dpcDxc));
+        Hf.setTo(dzDpc.mult(dpcDpg));
 
+        // Modifty the measurement Jacobian to ensure observability constraint.
+        SimpleMatrix A = Hx;
         SimpleMatrix u = new SimpleMatrix(6,1);
-        u.insertIntoThis(0,0, quaternionToRotation(camState.orientation).mult(ImuState.GRAVITY));
-        u.insertIntoThis(3,0, skewSymmetric(pw.minus(camState.position)).mult(ImuState.GRAVITY)); // TODO: is it OK that I use position instead of position_null?
+        u.insertIntoThis(0,0, quaternionToRotation(camState.orientationNull).mult(ImuState.GRAVITY));
+        u.insertIntoThis(3,0, skewSymmetric(pw.minus(camState.positionNull)).mult(ImuState.GRAVITY));
 
         Hx.setTo(A.minus(
                     A.mult(u).mult(
@@ -766,22 +784,24 @@ public abstract class MsckfAbstract implements Msckf {
 
         // Compute the residual
         r.setTo(z.minus(new SimpleMatrix(new double[]{
-                X / Z,
-                Y / Z
+                pc.get(0) / pc.get(2),
+                pc.get(1) / pc.get(2)
         })));
 
     }
 
 
-    public SimpleMatrix calcOmega(DMatrixRMaj gyro) {
-        SimpleMatrix omega = SimpleMatrix.identity(4);
-        omega.insertIntoThis(0,0, SimpleMatrix.wrap(skewSymmetric(gyro)).scale(-1));
-        omega.insertIntoThis(3,0,SimpleMatrix.wrap(gyro).scale(-1));
-        omega.insertIntoThis(0,3,SimpleMatrix.wrap(gyro));
+    public SimpleMatrix calcOmega(SimpleMatrix gyro) {
+        SimpleMatrix omega = new SimpleMatrix(4,4);
+        omega.insertIntoThis(0,0,skewSymmetric(gyro).negative());
+        omega.insertIntoThis(3,0,gyro.negative());
+        omega.insertIntoThis(0,3,gyro);
         return omega;
     }
-    public void integrate(double dt, DMatrixRMaj gyro, DMatrixRMaj acc) {
-        double gyroNorm = normP2(gyro);
+
+
+    public void predictNewState(double dt, SimpleMatrix gyro, SimpleMatrix acc) {
+        double gyroNorm = gyro.normF();
         SimpleMatrix omega = calcOmega(gyro);
 
         SimpleMatrix q = stateServer.imuState.orientation;
@@ -819,27 +839,25 @@ public abstract class MsckfAbstract implements Msckf {
 
         // Apply 4th order Runge-Kutta
         // k1 = f(tn, yn)
-        SimpleMatrix accWrapped = SimpleMatrix.wrap(acc);
-        // TODO: check if correct copied
         SimpleMatrix k1vDot = quaternionToRotation(q)
                 .transpose()
-                .mult(accWrapped)
+                .mult(acc)
                 .plus(ImuState.GRAVITY);
         SimpleMatrix k1pDot = v;
 
         // k2 = f(tn+dt/2, yn+k1*dt/2)
         SimpleMatrix k1v = v.plus(k1vDot.scale(dt/2));
-        SimpleMatrix k2vDot = drDt2Transpose.mult(accWrapped).plus(ImuState.GRAVITY);
+        SimpleMatrix k2vDot = drDt2Transpose.mult(acc).plus(ImuState.GRAVITY);
         SimpleMatrix k2pDot = k1v;
 
         // k3 = f(tn+dt/2, yn+k2*dt/2)
         SimpleMatrix k2v = v.plus(k2vDot).scale(dt/2);
-        SimpleMatrix k3vDot = drDt2Transpose.mult(accWrapped).plus(ImuState.GRAVITY);
+        SimpleMatrix k3vDot = drDt2Transpose.mult(acc).plus(ImuState.GRAVITY);
         SimpleMatrix k3pDot = k2v;
 
         // k4 = f(tn+dt, yn+k3*dt)
         SimpleMatrix k3v = v.plus(k3vDot.scale(dt));
-        SimpleMatrix k4vDot = drDtTranspose.mult(accWrapped).plus(ImuState.GRAVITY);
+        SimpleMatrix k4vDot = drDtTranspose.mult(acc).plus(ImuState.GRAVITY);
         SimpleMatrix k4pDot = k3v;
 
         // yn+1 = yn + dt/6*(k1+2*k2+2*k3+k4)

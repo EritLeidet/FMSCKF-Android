@@ -1,4 +1,4 @@
-package com.android.msckfs;
+package com.android.msckfs.msckfs;
 
 import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
 
@@ -12,6 +12,7 @@ import static org.ejml.dense.row.CommonOps_DDRM.subtract;
 import static java.lang.Double.max;
 import static java.lang.Double.min;
 
+import com.android.msckfs.utils.Isometry3D;
 import com.android.msckfs.utils.MathUtils;
 
 import org.apache.commons.collections4.map.LinkedMap;

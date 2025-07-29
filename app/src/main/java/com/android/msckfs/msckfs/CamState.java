@@ -1,6 +1,5 @@
-package com.android.msckfs;
+package com.android.msckfs.msckfs;
 
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 public class CamState extends State {
@@ -10,10 +9,10 @@ public class CamState extends State {
 
 
     public SimpleMatrix orientation; // Quaternion
-    public SimpleMatrix position; // vec3d //
+    public SimpleMatrix position; // vec3d
 
     // TODO: what are these for? Does tutorial have them too?
-    public SimpleMatrix orientationNull; // Quaternion
-    public SimpleMatrix positionNull;
+    public final SimpleMatrix orientationNull; // Quaternion
+    public final SimpleMatrix positionNull;
 
 }

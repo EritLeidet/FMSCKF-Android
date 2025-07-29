@@ -1,9 +1,8 @@
-package com.android.msckfs;
+package com.android.msckfs.utils;
 
 import static org.ejml.dense.row.CommonOps_DDRM.identity;
 import static org.ejml.dense.row.CommonOps_DDRM.insert;
 
-import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 
 /**

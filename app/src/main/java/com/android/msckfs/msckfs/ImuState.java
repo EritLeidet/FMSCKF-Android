@@ -1,4 +1,6 @@
-package com.android.msckfs;
+package com.android.msckfs.msckfs;
+import com.android.msckfs.utils.Isometry3D;
+
 import org.ejml.simple.SimpleMatrix;
 
 /**
@@ -6,7 +8,6 @@ import org.ejml.simple.SimpleMatrix;
  */
 public class ImuState extends State {
 
-    // TODO: Instantialize where?
 
     /**
      Transformation offset from the IMU frame to the body frame.
@@ -14,24 +15,31 @@ public class ImuState extends State {
      body frame. The z axis of the body frame should point upwards.
      Normally, this transform should be identity.
      **/
-    private Isometry3D tImu;
-
-    public final SimpleMatrix rImuCam = null; // TODO: initalize
-
-    // TODO: initialize:
-    public final SimpleMatrix tCamImu = null; // rotation from imu to cam0, translation from cam0 to imu
-
+    public static Isometry3D tImuBody = new Isometry3D(SimpleMatrix.identity(3), new SimpleMatrix(3,1));
 
     //public final static Vector gravity;
 
     public SimpleMatrix orientation; // Quaternion
 
+    public SimpleMatrix orientationNull; // Quaternion
+
     public SimpleMatrix gyroBias = new SimpleMatrix(3,1);
     public SimpleMatrix accBias = new SimpleMatrix(3,1);
 
     // Velocity of the IMU.
+    // TODO: should these really be initialized already?
     public SimpleMatrix velocity = new SimpleMatrix(3,1);
+
+    public SimpleMatrix velocityNull = new SimpleMatrix(3,1);
+
     public SimpleMatrix position = new SimpleMatrix(3,1);
+    public SimpleMatrix positionNull = new SimpleMatrix(3,1);
+
+    // TODO: velocity_null? position_null? orientation_null?
+
+    // Transformation between the IMU and the left camera (cam0) // TODO: what are these for my phone? How to determine? See paper.
+    public SimpleMatrix rImuCam = SimpleMatrix.identity(3);
+    public SimpleMatrix tCamImu = new SimpleMatrix(3,1);
 
     public static final SimpleMatrix GRAVITY = new SimpleMatrix(new double[]{0,0,-9.81});
 

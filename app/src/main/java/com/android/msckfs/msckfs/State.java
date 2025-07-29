@@ -1,4 +1,4 @@
-package com.android.msckfs;
+package com.android.msckfs.msckfs;
 
 public abstract class State {
     public int id;

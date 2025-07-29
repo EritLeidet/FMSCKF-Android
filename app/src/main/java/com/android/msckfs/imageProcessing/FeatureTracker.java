@@ -1,18 +1,15 @@
-package com.android.msckfs;
+package com.android.msckfs.imageProcessing;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
-import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
-import android.util.Range;
 
 import androidx.annotation.OptIn;
-import androidx.camera.camera2.interop.Camera2Interop;
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
 import androidx.camera.core.CameraEffect;
 import androidx.camera.core.ImageAnalysis;

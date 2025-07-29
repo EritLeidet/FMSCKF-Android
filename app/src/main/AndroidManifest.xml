@@ -21,7 +21,7 @@
         android:theme="@style/Theme.MSCKFsAutomaticPort"
         >
         <activity
-            android:name=".CameraActivity"
+            android:name=".imageProcessing.CameraActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -29,7 +29,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".FeatureTracker" android:exported="true"/>
+        <activity android:name=".imageProcessing.FeatureTracker" android:exported="true"/>
     </application>
 
 </manifest>
