@@ -4,14 +4,15 @@ import org.ejml.simple.SimpleMatrix;
 
 public class ImuMessage {
 
-    public final float[] angularVelocity; // vec3
-    public final float[] linearAcceleration; // vec3
+    // TODO: there should be a compiler error, bc. change from float[] -> SimpleMatrix
+    public final SimpleMatrix angularVelocity; // vec3
+    public final SimpleMatrix linearAcceleration; // vec3
 
     public final long timestamp; // unix time
 
     public ImuMessage(long timestamp, float[] angularVelocity, float[] linearAcceleration) {
-        this.angularVelocity = angularVelocity;
-        this.linearAcceleration = linearAcceleration;
+        this.angularVelocity = new SimpleMatrix(angularVelocity);
+        this.linearAcceleration = new SimpleMatrix(linearAcceleration);
         this.timestamp = timestamp;
     }
 }

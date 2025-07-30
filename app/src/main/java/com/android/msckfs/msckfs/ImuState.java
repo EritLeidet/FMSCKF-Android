@@ -35,16 +35,14 @@ public class ImuState extends State {
     public SimpleMatrix position = new SimpleMatrix(3,1);
     public SimpleMatrix positionNull = new SimpleMatrix(3,1);
 
-    // TODO: velocity_null? position_null? orientation_null?
-
     // Transformation between the IMU and the left camera (cam0) // TODO: what are these for my phone? How to determine? See paper.
     public SimpleMatrix rImuCam = SimpleMatrix.identity(3);
     public SimpleMatrix tCamImu = new SimpleMatrix(3,1);
 
-    public static final SimpleMatrix GRAVITY = new SimpleMatrix(new double[]{0,0,-9.81});
+    public static SimpleMatrix GRAVITY = new SimpleMatrix(new double[]{0,0,-9.81});
 
     public static int nextId; //TODO: initialize? // TODO: what this for?
-    public ImuState(int id, long timestamp) {
-        super(id, timestamp);
+    public ImuState() {
+        super(0, -1);
     }
 }

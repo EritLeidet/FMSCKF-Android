@@ -15,6 +15,8 @@ public class Isometry3D {
 
     public SimpleMatrix t; // vector
     public Isometry3D(SimpleMatrix R, SimpleMatrix t) {
+        assert(R.getNumRows() == R.getNumCols() && R.getNumRows() == 3);
+        assert(t.isVector() && t.getNumRows() == 3);
         this.R = R;
         this.t = t;
     }

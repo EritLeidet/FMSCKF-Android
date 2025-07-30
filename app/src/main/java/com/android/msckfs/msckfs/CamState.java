@@ -7,12 +7,12 @@ public class CamState extends State {
         super(id, timestamp);
     }
 
+    // TODO: initialize
 
     public SimpleMatrix orientation; // Quaternion
     public SimpleMatrix position; // vec3d
 
-    // TODO: what are these for? Does tutorial have them too?
-    public final SimpleMatrix orientationNull; // Quaternion
-    public final SimpleMatrix positionNull;
+    public SimpleMatrix orientationNull; // Quaternion
+    public  SimpleMatrix positionNull;
 
 }

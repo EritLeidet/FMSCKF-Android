@@ -172,6 +172,59 @@ public class MathUtils {
 
     }
 
+    /**
+     * Rotation quaternion from v0 to v1.
+     */
+
+    public static SimpleMatrix fromTwoVectors(SimpleMatrix v0, SimpleMatrix v1) {
+        v0 = v0.divide(v0.normF());
+        v1 = v1.divide(v1.normF());
+        double d = v0.dot(v1);
+
+        // if dot == -1, vectors are nearly opposite
+        SimpleMatrix q = new SimpleMatrix(4,1);
+        if (d < -0.999999) {
+            SimpleMatrix axis = cross(
+                    new SimpleMatrix(new double[]{1,0,0}),
+                    v0);
+            if (axis.normF() < 0.000001) {
+                axis = cross(
+                        new SimpleMatrix(new double[]{0,1,0}),
+                        v0);
+                q.insertIntoThis(0,0,axis);
+            }
+        } else if (d > 0.999999) {
+            q = new SimpleMatrix(new double[]{0,0,0,1});
+        } else {
+            double s = sqrt((1+d)*2);
+            SimpleMatrix axis = cross(v0,v1);
+            SimpleMatrix vec = axis.divide(s);
+            double w = 0.5 * s;
+            q.insertIntoThis(0,0,vec);
+            q.set(3,w);
+        }
+
+        q = quaternionNormalize(q);
+        return quaternionConjugate(q); // hamilton -> JPL
+    }
+
+    public static SimpleMatrix quaternionConjugate(SimpleMatrix q) {
+        SimpleMatrix con = new SimpleMatrix(4,1);
+        con.insertIntoThis(0,0, q.negative().rows(0,3));
+        con.set(3, q.get(3));
+        return con;
+
+    }
+
+    public static SimpleMatrix cross(SimpleMatrix a, SimpleMatrix b) {
+        assert(a.isVector() && a.getNumRows() == 3);
+        assert(b.isVector() && b.getNumRows() == 3);
+        return new SimpleMatrix(new double[]{
+                a.get(2)*b.get(3) - a.get(3)*b.get(2),
+                a.get(3)*b.get(1) - a.get(1)*b.get(3),
+                a.get(1)*b.get(2) - a.get(2)*b.get(1),
+        });
+    }
 
     /**
      * Create a skew-symmetric matrix from a 3-element vector.
