@@ -30,11 +30,15 @@ public class Isometry3D {
     }
 
     public Isometry3D inverse(){
-        return null; //TODO
+        return new Isometry3D(
+                this.R.transpose(),
+                this.R.transpose().negative().mult(this.t));
     }
 
-    public Isometry3D mult(Isometry3D i){
-        return null; //TODO
+    public Isometry3D mult(Isometry3D T1){
+        SimpleMatrix R = this.R.mult(T1.R);
+        SimpleMatrix t = this.R.mult(T1.t).plus(this.t);
+        return new Isometry3D(R,t);
     }
 
 }

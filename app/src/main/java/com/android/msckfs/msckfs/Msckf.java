@@ -80,7 +80,7 @@ public abstract class Msckf {
         assert(!denseSolver.modifiesB());
 
         F = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,StateInfo.IMU_STATE_SIZE);
-        G = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,12); // TODO: 12 columns in C++, but 21 in Python?
+        G = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,12); // 12, not 21.
 
         SimpleMatrix continuousNoiseCov = new SimpleMatrix(12,12);
         continuousNoiseCov.insertIntoThis(0,0, SimpleMatrix.identity(3).scale(Config.GYRO_NOISE));
@@ -114,9 +114,6 @@ public abstract class Msckf {
                 Config.tImuBody.extractMatrix(0,3,0,3).transpose(),
                 Config.tImuBody.extractMatrix(0,3,3,SimpleMatrix.END));
 
-
-
-        // TODO ... weitere Initialisierung
 
     }
 
@@ -162,8 +159,6 @@ public abstract class Msckf {
         // f = -to_rotation(imu_state.orientation).T * skew(acc)
         f = mult(f,skewSymmetric(acc.getDDRM()), new DMatrixRMaj());
         insert(f,F,6,0);
-
-        // TODO:
     }
 
     /**
@@ -235,14 +230,10 @@ public abstract class Msckf {
         return StateInfo.IMU_STATE_SIZE + stateServer.camStates.size() * StateInfo.CAM_STATE_SIZE;
     }
 
-    // TODO: Covariance zu Size 21 und alle Zugriffe ändern
-
     /**
      *
      */
     public void processModel(double time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
-
-        // TODO: there's a lot of stuff missing in this method ...
         ImuState imuState = stateServer.imuState;
 
         SimpleMatrix gyro = mGyro.minus(imuState.gyroBias);
@@ -346,9 +337,6 @@ public abstract class Msckf {
         // Initialize the initial orientation, so that the estimation
         // is consistent with the inertial frame.
         stateServer.imuState.orientation = fromTwoVectors(ImuState.GRAVITY, gravityImu);
-
-
-        //TODO: ...
     }
 
 
@@ -484,7 +472,7 @@ public abstract class Msckf {
             }
             featureJacobian(feature, involvedCamStateIds, Hxj, rj);
 
-            if (gatingTest(Hxj, rj, involvedCamStateIds.size())) { // TODO: size() or size()-1? in prune_ and remove_ different. See tutorial?
+            if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
                 Hx.insertIntoThis(stackCount, 0, Hxj);
                 r.insertIntoThis(stackCount, 0, rj);
                 stackCount += Hxj.getNumRows();
@@ -499,7 +487,7 @@ public abstract class Msckf {
         r = r.rows(0,stackCount);
 
         // Perform measurment update.
-        measurementUpdate(Hx, r); // TODO: In MSCKF-S only uses a subset of CamIDS
+        measurementUpdate(Hx, r);
 
         for (Integer camId : rmCamStateIds) {
             int idx = stateServer.camStates.indexOf(camId);
@@ -533,7 +521,7 @@ public abstract class Msckf {
                 continue;
             }
 
-            if (!feature.isInitialized) { // TODO: why check if initialized? isn't it always uninitialized at this point?
+            if (!feature.isInitialized) {
                 // Ensure there is enough translation to triangulate the feature
                 if (!feature.checkMotion(stateServer.camStates)) {
                     // If the feature cannot be initialized, just remove
@@ -579,11 +567,11 @@ public abstract class Msckf {
                 r.insertIntoThis(stackCount, 0, rj);
                 stackCount += Hxj.getNumRows();
             }
-            // Put an upper bound on the row size of measurement Jacobian, // TODO: dieser Teil ist in MSCKF-S nur bei prune-buffer, nicht bei remove-lost.
+            // Put an upper bound on the row size of measurement Jacobian,
             // which helps guarantee the execution time.
             if (stackCount > 1500) break;
         }
-        Hx.reshape(stackCount, Hx.getNumCols()); // TODO: falls ich den upper bound wegnehme, dann auch das hier.
+        Hx.reshape(stackCount, Hx.getNumCols());
         r.reshape(stackCount, 1);
 
         // Perform the measurement update step.
@@ -599,7 +587,7 @@ public abstract class Msckf {
 
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
     //private final LinearSolver<DMatrixSparseCSC,DMatrixRMaj> sparseSolver = LinearSolverFactory_DSCC.qr(FillReducing.NONE);
-    private final DMatrixRMaj A = null, X = null; // TODO: initialize
+    private final DMatrixRMaj A = new DMatrixRMaj(), X = new DMatrixRMaj();
 
     @SuppressWarnings("ConstantConditions") // suppress unwanted null pointer warnings
     private boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) {
@@ -637,13 +625,17 @@ public abstract class Msckf {
 
     }
 
+    public void onlineReset() {
+        // TODO.
+    }
+
     private final DMatrixRMaj J = new DMatrixRMaj(StateInfo.CAM_STATE_SIZE, StateInfo.IMU_STATE_SIZE);
 
     /**
      * Generates a new camera state and adds it to the full state and covariance.
      */
     public void stateAugmentation(long timestamp) {
-        // Get the imu_state, rotation from imu to cam0, and translation from cam0 to imu
+        // Get the imu_state, rotation from imu to cam, and translation from cam to imu
         SimpleMatrix Ric = stateServer.imuState.rImuCam;
         SimpleMatrix tci = stateServer.imuState.tCamImu;
 
@@ -662,7 +654,7 @@ public abstract class Msckf {
         J.zero();
         insert(Ric.getDDRM(),J,0,0);
         insert(identity(3), J,0,15);
-        insert(skewSymmetric(Rwi.transpose().mult(tci).getDDRM()), J,3,0); // TODO: different in tutorial and MSCKF-S (Python)
+        insert(skewSymmetric(Rwi.transpose().mult(tci).getDDRM()), J,3,0);
         insert(identity(3),J,3,12);
         insert(Rwi.transpose().getDDRM(),J,3,18);
 
@@ -680,14 +672,6 @@ public abstract class Msckf {
 
     }
 
-    private void update(List<Integer> trackedFeatureIds) {
-        // TODO: ...
-
-        // TODO: why do we iterate over the ids, an not over features? Memory efficiency reasons?
-        for (Integer featureId : trackedFeatureIds) {}
-
-        // TODO: ...
-    }
 
     /**
      * Given an IMU measurement, propagates the latest camera pose to the timestamp in measurement
@@ -711,11 +695,14 @@ public abstract class Msckf {
             Hsparse.setTo(H.getDDRM());
 
             QR.decompose(Hsparse);
+            // TODO: compare with MatLab: https://github.com/utiasSTARS/msckf-swf-comparison/blob/ad9566ef35c3e4792a89b04623e1fa2f99238435/msckf/calcTH.m#L4
             DMatrixSparseCSC Q = QR.getQ(null,true); // Python equivalent: linalg.qr(a, mode='reduced')
-            DMatrixSparseCSC R = QR.getR(null,false); // TODO: true or false?
-            // TODO: everything else in this bracket logically correct?
+            DMatrixSparseCSC R = QR.getR(null,true); // TODO: true or false?
+
+            // TODO: C++ and Python difference.
 
             // H_thin
+            // TODO: why not R.T*
             Hthin = SimpleMatrix.wrap(new DMatrixRMaj(R)); // convert to DMatrixRMaj before wrapping
 
             // r_thin

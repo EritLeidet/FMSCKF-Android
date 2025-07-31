@@ -1,6 +1,7 @@
 package com.android.msckfs.utils;
 
 
+import static org.ejml.dense.row.NormOps_DDRM.normF;
 import static java.lang.Math.sqrt;
 
 import org.ejml.data.DMatrixRMaj;
@@ -60,8 +61,8 @@ public class MathUtils {
      * [q1, q2, q3, q4(scalar)]^T
      */
     public static DMatrixRMaj quaternionToRotation(DMatrixRMaj q) {
-        // TODO: also norm() like in Python, or don't, like in C++? --> C++ has separate quaternionNormalize funct? When is that (not) used?
         assert(q.numCols == 1 && q.numRows == 4);
+        quaternionNormalize(q);
         SimpleMatrix qVec = new SimpleMatrix(new double[]{q.get(0), q.get(1), q.get(2)});
         final double q4 = q.get(3);
         return SimpleMatrix.identity(3)
@@ -150,6 +151,10 @@ public class MathUtils {
         return q.divide(q.normF());
     }
 
+    public static void quaternionNormalize(DMatrixRMaj q) {
+        CommonOps_DDRM.divide(q, normF(q));
+    }
+
     /**
      * Convert a rotation matrix to a quaternion.
      * Pay attention to the convention used. The function follows the
@@ -158,8 +163,8 @@ public class MathUtils {
      * The input quaternion should be in the form [q1, q2, q3, q4(scalar)]
      */
     public static SimpleMatrix quaternionMultiplication(SimpleMatrix q1, SimpleMatrix q2) {
-        // TODO: norm input parameters? Done in MSCKF-S Python, but not C++...
-
+        q1 = quaternionNormalize(q1);
+        q2 = quaternionNormalize(q2);
         SimpleMatrix L = new SimpleMatrix(new double[][]{
                 {q1.get(3), q1.get(2),  -q1.get(1), q1.get(0)},
                 {-q1.get(2),q1.get(3),  q1.get(0),  q1.get(1)},

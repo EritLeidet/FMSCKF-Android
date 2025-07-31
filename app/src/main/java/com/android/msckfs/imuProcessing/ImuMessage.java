@@ -3,8 +3,6 @@ package com.android.msckfs.imuProcessing;
 import org.ejml.simple.SimpleMatrix;
 
 public class ImuMessage {
-
-    // TODO: there should be a compiler error, bc. change from float[] -> SimpleMatrix
     public final SimpleMatrix angularVelocity; // vec3
     public final SimpleMatrix linearAcceleration; // vec3
 

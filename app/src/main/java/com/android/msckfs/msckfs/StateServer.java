@@ -7,12 +7,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class StateServer {
-
-    // TODO: initialize
     public final ImuState imuState = new ImuState();
     public final LinkedMap<Integer, CamState> camStates = new LinkedMap<>();
     public final Map<Integer, Feature> mapServer = new HashMap<>();
-    public SimpleMatrix stateCov; // State covariance matrix. // TODO: initialisieren?
+    public SimpleMatrix stateCov; // State covariance matrix.
     public final SimpleMatrix continuousNoiseCov;
 
     public StateServer(SimpleMatrix stateCov, SimpleMatrix continuousNoiseCov) {

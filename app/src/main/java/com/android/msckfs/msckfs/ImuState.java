@@ -27,7 +27,6 @@ public class ImuState extends State {
     public SimpleMatrix accBias = new SimpleMatrix(3,1);
 
     // Velocity of the IMU.
-    // TODO: should these really be initialized already?
     public SimpleMatrix velocity = new SimpleMatrix(3,1);
 
     public SimpleMatrix velocityNull = new SimpleMatrix(3,1);
@@ -41,8 +40,8 @@ public class ImuState extends State {
 
     public static SimpleMatrix GRAVITY = new SimpleMatrix(new double[]{0,0,-9.81});
 
-    public static int nextId; //TODO: initialize? // TODO: what this for?
-    public ImuState() {
+    public static int nextId = 0;
+    public ImuState() {  // TODO: sollte ID nicht im Konstruktor mitgegeben werden?
         super(0, -1);
     }
 }
