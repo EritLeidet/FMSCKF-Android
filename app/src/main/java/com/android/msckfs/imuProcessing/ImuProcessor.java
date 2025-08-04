@@ -7,13 +7,16 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.util.Log;
 
+import com.android.msckfs.msckfs.Msckf;
+
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 public class ImuProcessor implements SensorEventListener {
 
     private SensorManager mSensorManager;
 
-    private static final String tag = "MotionPublisher";
+    private static final String tag = "ImuProcessor";
     private Sensor mGyro;
     private Sensor mAcc;
     private float[] angVel = null; // most recent angular velocity reading
@@ -21,11 +24,10 @@ public class ImuProcessor implements SensorEventListener {
 
     //private Thread publishingJob;
 
+    private Msckf msckf;
 
-    private Consumer<ImuMessage> callback;
-
-    public ImuProcessor(Context context, Consumer<ImuMessage> callback) {
-        this.callback = callback;
+    public ImuProcessor(Context context, Msckf msckf) {
+        this.msckf = msckf;
         mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
 
         mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
@@ -71,9 +73,11 @@ public class ImuProcessor implements SensorEventListener {
         }
 
         if (angVel != null && linAcc != null) {
-            // TODO: reset angVel and linAcc to null?
-            callback.accept(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
-            // Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
+            // TODO: reset angVel and linAcc to null? So that almost synchronized?
+            msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
+
+            //callback.accept(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
+            Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
         }
 
     }

@@ -9,7 +9,7 @@ import java.util.Map;
 public class StateServer {
     public final ImuState imuState = new ImuState();
     public final LinkedMap<Integer, CamState> camStates = new LinkedMap<>();
-    public final Map<Integer, Feature> mapServer = new HashMap<>();
+    public final Map<Long, Feature> mapServer = new HashMap<>();
     public SimpleMatrix stateCov; // State covariance matrix.
     public final SimpleMatrix continuousNoiseCov;
 

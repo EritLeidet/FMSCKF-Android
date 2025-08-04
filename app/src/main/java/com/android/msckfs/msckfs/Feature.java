@@ -33,7 +33,7 @@ import java.util.Map;
  */
 public class Feature {
 
-    public final int id;
+    public final long id;
 
     public boolean isInitialized = false;
 
@@ -47,7 +47,7 @@ public class Feature {
     private final LinearSolver<DMatrixRMaj,DMatrixRMaj> denseSolver = new LinearSolverCholLDL_DDRM();
 
     public SimpleMatrix position;
-    public Feature(int id) {
+    public Feature(long id) {
         this.observations = new LinkedMap<>();
         this.id = id;
     }

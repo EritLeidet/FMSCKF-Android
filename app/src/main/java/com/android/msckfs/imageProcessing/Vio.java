@@ -1,9 +1,16 @@
 package com.android.msckfs.imageProcessing;
 
+import static android.hardware.camera2.CameraCharacteristics.LENS_DISTORTION;
+import static android.hardware.camera2.CameraCharacteristics.LENS_INTRINSIC_CALIBRATION;
+
+import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -19,6 +26,10 @@ import androidx.camera.core.UseCaseGroup;
 import androidx.camera.effects.OverlayEffect;
 import androidx.core.util.Consumer;
 
+import com.android.msckfs.imuProcessing.ImuProcessor;
+import com.android.msckfs.msckfs.Msckf;
+import com.android.msckfs.msckfs.Odometry;
+
 import org.ddogleg.struct.DogArray_I8;
 import org.jspecify.annotations.NonNull;
 
@@ -33,11 +44,16 @@ import boofcv.abst.feature.detect.interest.ConfigPointDetector;
 import boofcv.abst.feature.detect.interest.PointDetectorTypes;
 import boofcv.abst.tracker.PointTrack;
 import boofcv.abst.tracker.PointTracker;
+import boofcv.alg.distort.LensDistortionNarrowFOV;
+import boofcv.alg.distort.brown.LensDistortionBrown;
 import boofcv.alg.tracker.klt.ConfigPKlt;
 import boofcv.android.ConvertBitmap;
 import boofcv.factory.tracker.FactoryPointTracker;
+import boofcv.struct.calib.CameraPinholeBrown;
+import boofcv.struct.distort.Point2Transform2_F64;
 import boofcv.struct.image.GrayS16;
 import boofcv.struct.image.GrayU8;
+import georegression.struct.point.Point2D_F64;
 
 /**
  * Source code based on:
@@ -46,9 +62,8 @@ import boofcv.struct.image.GrayU8;
  *  - <a href="https://github.com/lessthanoptimal/AndroidAutoFocus/blob/master/app/src/main/java/boofcv/androidautofocus/MainActivity.java">...</a>
  *  - https://android-review.googlesource.com/c/platform/frameworks/support/+/2797834/9/camera/integration-tests/viewtestapp/src/main/java/androidx/camera/integration/view/OverlayFragment.kt#90
  */
-public class FeatureTracker extends CameraActivity implements ImageAnalysis.Analyzer {
+public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
-    // TODO: normalize keypoints, b4 passing them to MSCKF? Like in Tutorial? feature_tracker.get_current_normalized_keypoints_and_ids()
     // TODO: RANSAC?
 
     // TODO: do you have to use imu as well, to help feature tracking?
@@ -58,7 +73,7 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
     private final List<PointTrack> inactive = new ArrayList<>();
     private PointTracker<GrayU8> tracker;
 
-    private ExecutorService cameraExecutor; // TODO: why attribute? Do I need to close?
+    private ExecutorService cameraExecutor;
 
     private HandlerThread handlerThread;
     private Handler handler;
@@ -68,14 +83,21 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
     private static final int respawnThreshold = 50; // if number of tracks drops below this value it will attempt to spawn more
     private static final int maxFeatures = 200; // 350
 
-    // TODO: didn't I need to implement some kind of distortion?
+
+    private final Msckf msckf = new Msckf();
+
+    private ImuProcessor imuProcessor;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         initTracker();
-
+        try {
+            this.undistort = createUndistort();
+            this.imuProcessor = new ImuProcessor(getApplicationContext(), msckf);
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Camera access denied.");
+        }
 
 
     }
@@ -89,6 +111,44 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
         useCases.addUseCase(getPreviewUseCase());
         useCases.addEffect(effect);
         return useCases.build();
+    }
+
+    private Point2Transform2_F64 undistort;
+    private Point2Transform2_F64 createUndistort() throws CameraAccessException {
+        CameraManager cameraManager = (CameraManager) getApplicationContext().getSystemService(Context.CAMERA_SERVICE);
+        CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics("0"); // TODO: determine cameraID
+        float[] lensIntrinsics = cameraCharacteristics.get(LENS_INTRINSIC_CALIBRATION);
+        float[] distortionParams = cameraCharacteristics.get(LENS_DISTORTION);
+        CameraPinholeBrown cameraModel = new CameraPinholeBrown(
+                lensIntrinsics[0], // fx
+                lensIntrinsics[1], // fy
+                lensIntrinsics[4], // skew
+                lensIntrinsics[2], // cx
+                lensIntrinsics[3], // cy
+                resolution.getWidth(),
+                resolution.getHeight());
+        cameraModel.setRadial(
+                distortionParams[0], // kappa_1
+                distortionParams[1], // kappa_2
+                distortionParams[2]); // kappa_3
+        cameraModel.setT1(distortionParams[3]);
+        cameraModel.setT2(distortionParams[4]);
+        LensDistortionNarrowFOV lensUndistorter = new LensDistortionBrown(cameraModel);
+
+        return lensUndistorter.undistort_F64(true, true);
+
+    }
+    private List<FeatureMeasurement> undistortPoints(List<PointTrack> tracks) {
+        List<FeatureMeasurement> undistortedPoints = new ArrayList<>(tracks.size());
+        Point2D_F64 buffer = new Point2D_F64();
+        for (PointTrack track : tracks) {
+            undistort.compute(track.pixel.x, track.pixel.y, buffer);
+            undistortedPoints.add(new FeatureMeasurement(track.featureId, buffer.x, buffer.y));
+        }
+        return undistortedPoints;
+        // TODO: normalize points? Tutorial mentions normalization, but only undistorts? What about MSCKF-S?
+        // TODO: which points? New or all? ALL.
+        // TODO: ...
     }
 
 
@@ -112,6 +172,7 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
             visualizer.onDraw( frame.getOverlayCanvas());
             return true;
         });
+
 
 
         cameraExecutor = Executors.newSingleThreadExecutor();
@@ -147,7 +208,6 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
         tracker.getInactiveTracks(inactive);
         for (PointTrack track : inactive) {
             if(tracker.getFrameID() - track.lastSeenFrameID > 2) tracker.dropTrack(track);
-
         }
 
         tracker.getActiveTracks(active);
@@ -159,8 +219,15 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
 
         }
 
-        // TODO: Nullpointer exception bc. FrameBuffer is null
-        effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp());
+
+        // effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp());
+
+
+        Odometry odom = msckf.featureCallback(new FeatureMessage(
+                imageProxy.getImageInfo().getTimestamp(),
+                undistortPoints(active)));
+        if (odom != null) Log.i(TAG, odom.pose.t.toString());
+
         imageProxy.close();
 
     }
@@ -237,5 +304,6 @@ public class FeatureTracker extends CameraActivity implements ImageAnalysis.Anal
         effect.close();
         handlerThread.quitSafely();
         cameraExecutor.shutdown();
+        imuProcessor.stop();
     }
 }

@@ -8,9 +8,9 @@ public class CamState extends State {
     }
 
     public SimpleMatrix orientation; // Quaternion
-    public SimpleMatrix position; // vec3d
+    public SimpleMatrix position = new SimpleMatrix(3,1); // vec3d
 
     public SimpleMatrix orientationNull; // Quaternion
-    public  SimpleMatrix positionNull;
+    public  SimpleMatrix positionNull = new SimpleMatrix(3,1);;
 
 }

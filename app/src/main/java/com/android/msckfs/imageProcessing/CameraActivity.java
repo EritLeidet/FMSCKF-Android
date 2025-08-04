@@ -1,6 +1,7 @@
 package com.android.msckfs.imageProcessing;
 
 import static androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER;
+import static androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_NONE;
 
 import android.Manifest;
 import android.os.Bundle;
@@ -33,8 +34,10 @@ public class CameraActivity extends AppCompatActivity {
     protected ActivityFeatureTrackerBinding viewBinding; // TODO: XML-Name not generic
 
     // Resolution.
+
+    protected final Size resolution = new Size(640,480);
     protected final ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
-            .setResolutionStrategy(new ResolutionStrategy(new Size(640,480), FALLBACK_RULE_CLOSEST_LOWER))
+            .setResolutionStrategy(new ResolutionStrategy(resolution, FALLBACK_RULE_NONE))
             .build();
 
 

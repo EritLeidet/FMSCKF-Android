@@ -225,9 +225,9 @@ public class MathUtils {
         assert(a.isVector() && a.getNumRows() == 3);
         assert(b.isVector() && b.getNumRows() == 3);
         return new SimpleMatrix(new double[]{
-                a.get(2)*b.get(3) - a.get(3)*b.get(2),
-                a.get(3)*b.get(1) - a.get(1)*b.get(3),
                 a.get(1)*b.get(2) - a.get(2)*b.get(1),
+                a.get(2)*b.get(0) - a.get(0)*b.get(2),
+                a.get(0)*b.get(1) - a.get(1)*b.get(0),
         });
     }
 

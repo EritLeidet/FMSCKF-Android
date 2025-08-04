@@ -22,6 +22,8 @@ import static java.lang.Math.cos;
 import static java.lang.Math.pow;
 import static java.lang.Math.sin;
 
+import android.util.Log;
+
 import com.android.msckfs.imageProcessing.FeatureMessage;
 import com.android.msckfs.imuProcessing.ImuMessage;
 import com.android.msckfs.imageProcessing.FeatureMeasurement;
@@ -50,9 +52,9 @@ import java.util.Map;
  * <a href="https://github.com/daniilidis-group/msckf_mono/blob/master/include/msckf_mono/msckf.h">...</a>
  */
 
-public abstract class Msckf {
+public class Msckf {
 
-
+    private final static String TAG = "MSCKF";
     /**
      *  IMU data buffer.
      *  This is buffer is used to handle the unsynchronization or
@@ -307,6 +309,7 @@ public abstract class Msckf {
         if (!isGravitySet && imuBuffer.size() >= 200) {
             initializeGravityAndBias();
             this.isGravitySet = true;
+            Log.d(TAG, "Set gravity and bias!");
         }
     }
 
@@ -340,8 +343,8 @@ public abstract class Msckf {
     }
 
 
-    public void featureCallback(FeatureMessage featureMsg) {
-        if (!this.isGravitySet) return;
+    public Odometry featureCallback(FeatureMessage featureMsg) {
+        if (!this.isGravitySet) return null;
 
         if (isFirstImg) {
             isFirstImg = false;
@@ -367,13 +370,13 @@ public abstract class Msckf {
         removeOldCamStates();
 
         // Publish the odometry.
-        publish(featureMsg.timestamp);
+        return publish(featureMsg.timestamp);
 
     }
 
 
 
-    private void publish(double time) {
+    private Odometry publish(double time) {
         ImuState imuState = stateServer.imuState;
 
         Isometry3D Tiw = new Isometry3D(
@@ -386,7 +389,7 @@ public abstract class Msckf {
         SimpleMatrix tcw = imuState.position.plus(Tiw.R.mult(imuState.tCamImu));
         Isometry3D Tcw = new Isometry3D(Rwc.transpose(), tcw);
 
-        Odometry odom = new Odometry(time, Tbw, bodyVelocity, Tcw);
+        return new Odometry(time, Tbw, bodyVelocity, Tcw);
     }
 
     private void addFeatureObservations(FeatureMessage featureMsg) {
@@ -508,7 +511,7 @@ public abstract class Msckf {
 
     private void removeLostFeatures() {
         int jacobianRowSize = 0;
-        List<Integer> invalidFeatureIds = new LinkedList<>();
+        List<Long> invalidFeatureIds = new LinkedList<>();
         List<Feature> processedFeatures = new LinkedList<>();
         for (Feature feature : stateServer.mapServer.values()) {
             // Pass the features that are still being tracked
@@ -545,7 +548,7 @@ public abstract class Msckf {
             processedFeatures.add(feature);
         }
         // Remove the features that do not have enough measurements.
-        for (Integer featureId : invalidFeatureIds) {
+        for (Long featureId : invalidFeatureIds) {
             stateServer.mapServer.remove(featureId);
         }
 
@@ -851,7 +854,7 @@ public abstract class Msckf {
         Hx.setTo(dzDpc.mult(dpcDxc));
         Hf.setTo(dzDpc.mult(dpcDpg));
 
-        // Modifty the measurement Jacobian to ensure observability constraint.
+        // Modify the measurement Jacobian to ensure observability constraint.
         SimpleMatrix A = Hx;
         SimpleMatrix u = new SimpleMatrix(6,1);
         u.insertIntoThis(0,0, quaternionToRotation(camState.orientationNull).mult(ImuState.GRAVITY));
