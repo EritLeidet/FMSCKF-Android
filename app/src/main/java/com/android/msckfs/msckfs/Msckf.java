@@ -73,7 +73,7 @@ public class Msckf {
     private final DMatrixRMaj F, G;
 
 
-    private DMatrixRMaj g;
+    private DMatrixRMaj g = new DMatrixRMaj();
     private final DMatrixRMaj Fdt = new DMatrixRMaj(), FdtSquare = new DMatrixRMaj(), FdtCube = new DMatrixRMaj();
 
     private final Map<Integer,Double> chiSquaredTestTable = new HashMap<>();
@@ -257,8 +257,7 @@ public class Msckf {
                 .identity(StateInfo.IMU_STATE_SIZE)
                 .plus(SimpleMatrix.wrap(Fdt))
                 .plus(SimpleMatrix.wrap(FdtSquare).scale(0.5))
-                .plus(SimpleMatrix.wrap(FdtCube).scale(1./6.))
-                .getMatrix();
+                .plus(SimpleMatrix.wrap(FdtCube).scale(1./6.));
 
         // Propogate the state using 4th order Runge-Kutta
         predictNewState(dt, gyro, acc);
@@ -323,15 +322,18 @@ public class Msckf {
         DMatrixRMaj sumAngVel = new DMatrixRMaj(3,1);
         DMatrixRMaj sumLinearAcc = new DMatrixRMaj(3,1);
 
-        for (ImuMessage imuMsg : imuBuffer) {
-            add(sumAngVel, imuMsg.angularVelocity.getDDRM(), sumAngVel);
-            add(sumLinearAcc, imuMsg.linearAcceleration.getDDRM(), sumLinearAcc);
+        SimpleMatrix gravityImu;
+        synchronized (imuBuffer) {
+            for (ImuMessage imuMsg : imuBuffer) {
+                add(sumAngVel, imuMsg.angularVelocity.getDDRM(), sumAngVel);
+                add(sumLinearAcc, imuMsg.linearAcceleration.getDDRM(), sumLinearAcc);
+            }
+
+            stateServer.imuState.gyroBias = SimpleMatrix.wrap(sumAngVel).divide(imuBuffer.size());
+
+            // Find the gravity in the IMU frame.
+            gravityImu = SimpleMatrix.wrap(sumLinearAcc).divide(imuBuffer.size());
         }
-
-        stateServer.imuState.gyroBias = SimpleMatrix.wrap(sumAngVel).divide(imuBuffer.size());
-
-        // Find the gravity in the IMU frame.
-        SimpleMatrix gravityImu = SimpleMatrix.wrap(sumLinearAcc).divide(imuBuffer.size());
 
         // Normalize the gravity and save to IMUState
         double gravNorm = gravityImu.normF();
@@ -610,21 +612,24 @@ public class Msckf {
     private void batchImuProcessing(double timeBound) {
         int usedImuMsgCt = 0;
 
-        for (ImuMessage imuMsg : imuBuffer) {
-            if (imuMsg.timestamp < stateServer.imuState.timestamp) {
+        synchronized (imuBuffer) {
+            for (ImuMessage imuMsg : imuBuffer) {
+                if (imuMsg.timestamp < stateServer.imuState.timestamp) {
+                    usedImuMsgCt++;
+                    continue;
+                }
+                if (imuMsg.timestamp > timeBound) break;
+                processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
                 usedImuMsgCt++;
-                continue;
             }
-            if (imuMsg.timestamp > timeBound) break;
-            processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
-            usedImuMsgCt++;
         }
+
 
         stateServer.imuState.id = ImuState.nextId;
         ImuState.nextId += 1;
 
         // Remove all used IMU msgs.
-        imuBuffer.subList(0,usedImuMsgCt).clear();
+        synchronized (imuBuffer) {imuBuffer.subList(0,usedImuMsgCt).clear();}
 
     }
 
@@ -649,7 +654,7 @@ public class Msckf {
         CamState camState = new CamState(stateServer.imuState.id, timestamp);
         camState.orientation = rotationToQuaternion(Rwc);
         camState.position.setTo(tcw);
-        camState.orientationNull = camState.orientation;
+        camState.orientationNull.setTo(camState.orientation);
         camState.positionNull.setTo(camState.position);
         stateServer.camStates.put(stateServer.imuState.id, camState);
 
@@ -881,7 +886,7 @@ public class Msckf {
     public SimpleMatrix calcOmega(SimpleMatrix gyro) {
         SimpleMatrix omega = new SimpleMatrix(4,4);
         omega.insertIntoThis(0,0,skewSymmetric(gyro).negative());
-        omega.insertIntoThis(3,0,gyro.negative());
+        omega.insertIntoThis(3,0,gyro.transpose().negative());
         omega.insertIntoThis(0,3,gyro);
         return omega;
     }
@@ -955,8 +960,8 @@ public class Msckf {
         p = p.plus(k1pDot.plus(k2pDot.scale(2)).plus(k3pDot.scale(2)).plus(k4pDot).scale(dt/6));
 
         stateServer.imuState.orientation = q;
-        stateServer.imuState.position = v.getMatrix();
-        stateServer.imuState.velocity = p.getMatrix();
+        stateServer.imuState.position = v;
+        stateServer.imuState.velocity = p;
 
     }
 

@@ -68,7 +68,8 @@ public class MathUtils {
         return SimpleMatrix.identity(3)
                 .scale(2*q4*q4-1)
                 .minus(skewSymmetric(qVec).scale(2*q4))
-                .plus(qVec.scale(2).mult(qVec.transpose())).getDDRM();
+                .plus(qVec.scale(2).mult(qVec.transpose()))
+                .getDDRM();
     }
 
     public static SimpleMatrix quaternionToRotation(SimpleMatrix q) {
