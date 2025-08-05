@@ -38,9 +38,6 @@ public class ImuProcessor implements SensorEventListener {
         mSensorManager.registerListener(this, mAcc, SensorManager.SENSOR_DELAY_NORMAL);
 
 
-
-        //publishingJob = new PublishingJob();
-        //publishingJob.start();
         Log.i(tag, "Publishing Job started");
     }
 
@@ -76,8 +73,7 @@ public class ImuProcessor implements SensorEventListener {
             // TODO: reset angVel and linAcc to null? So that almost synchronized?
             msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
 
-            //callback.accept(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
-            Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
+            //Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
         }
 
     }

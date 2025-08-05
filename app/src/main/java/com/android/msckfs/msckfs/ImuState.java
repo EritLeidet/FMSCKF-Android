@@ -44,4 +44,23 @@ public class ImuState extends State {
     public ImuState() {  // TODO: sollte ID nicht im Konstruktor mitgegeben werden?
         super(0, -1);
     }
+
+
+    @Override
+    public String toString() {
+        return "ImuState{" +
+                "orientation=" + orientation +
+                ", orientationNull=" + orientationNull +
+                ", gyroBias=" + gyroBias +
+                ", accBias=" + accBias +
+                ", velocity=" + velocity +
+                ", velocityNull=" + velocityNull +
+                ", position=" + position +
+                ", positionNull=" + positionNull +
+                ", rImuCam=" + rImuCam +
+                ", tCamImu=" + tCamImu +
+                ", id=" + id +
+                ", timestamp=" + timestamp +
+                '}';
+    }
 }

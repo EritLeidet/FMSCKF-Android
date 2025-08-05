@@ -397,6 +397,7 @@ public class Msckf {
 
     private Odometry publish(double time) {
         ImuState imuState = stateServer.imuState;
+        //Log.d(TAG, imuState.toString());
 
         Isometry3D Tiw = new Isometry3D(
                 quaternionToRotation(imuState.orientation).transpose(),
@@ -435,7 +436,9 @@ public class Msckf {
     private void removeOldCamStates() {
         if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
 
-        // Find two camera states to be removed. Here we choose the oldest two. (Sorted ascending by ID.)
+        //Log.d(TAG, "Removing old Cam States. (stateServer.camStates.size() >= Config.MAX_CAM_STATES)");
+
+        // Find two camera states to be removed. Here we choose the oldest two.
         List<Integer> rmCamStateIds = new ArrayList<>(2);
         rmCamStateIds.add(stateServer.camStates.get(0));
         rmCamStateIds.add(stateServer.camStates.get(1));
@@ -492,6 +495,10 @@ public class Msckf {
             for (Integer camId : rmCamStateIds) {
                 if (feature.observations.containsKey(camId)) involvedCamStateIds.add(camId);
             }
+
+            if (involvedCamStateIds.isEmpty()) continue;
+
+
             featureJacobian(feature, involvedCamStateIds, Hxj, rj);
 
             if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
@@ -509,6 +516,7 @@ public class Msckf {
         r = r.rows(0,stackCount);
 
         // Perform measurment update.
+        Log.d(TAG, "removeOldCamStates Hx, r" + Hx + r);
         measurementUpdate(Hx, r);
 
         for (Integer camId : rmCamStateIds) {
@@ -572,7 +580,9 @@ public class Msckf {
         }
 
         // Return if there is no lost feature to be processed.
+        Log.d(TAG, "RemoveLostFeatures: checking if processFeatures.isEmpty.");
         if (processedFeatures.isEmpty()) return;
+        Log.d(TAG, "RemoveLostFeatures: !processedFeatures.isEmpty");
 
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
@@ -582,6 +592,7 @@ public class Msckf {
 
         // Process the features which lose track.
         for (Feature feature : processedFeatures) {
+            assert(!feature.observations.isEmpty());
             featureJacobian(feature, feature.observations.asList(), Hxj, rj);
 
             if (gatingTest(Hxj, rj, feature.observations.size()-1)) {
@@ -597,6 +608,7 @@ public class Msckf {
         r.reshape(stackCount, 1);
 
         // Perform the measurement update step.
+        Log.d(TAG, "removeLostFeatures Hx, r" + Hx + r);
         measurementUpdate(Hx, r);
 
         // Remove all processed features from the map.
@@ -709,6 +721,7 @@ public class Msckf {
      * Update the state vector given a deltaX computed from a measurement update.
      */
     public void measurementUpdate(SimpleMatrix H, SimpleMatrix r) {
+
         // Check if H and r are empty
         if (H.getNumElements() == 0 || r.getNumElements() == 0) return;
 
@@ -831,6 +844,8 @@ public class Msckf {
         // Project the residual and Jacobians onto the nullspace of H_fj.
         // svd of H_fj
         SimpleMatrix U = Hfj.svd().getU(); // Shape (m x m), m = Hfj.numRows = jacobianRowSize
+        //Log.d(TAG, "JacobianRowSize: " + jacobianRowSize);
+        //Log.d(TAG, String.format("U matrix dimensions: (%d, %d)", U.getNumRows(), U.getNumCols()));
         SimpleMatrix A = U.cols(jacobianRowSize - 3, SimpleMatrix.END); // Shape (m, 3)
 
         Hx.setTo(A.transpose().mult(Hxj));

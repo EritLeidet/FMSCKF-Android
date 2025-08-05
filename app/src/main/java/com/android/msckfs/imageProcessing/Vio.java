@@ -91,6 +91,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d(TAG, "Created FeatureTracker");
         initTracker();
         try {
             this.undistort = createUndistort();
@@ -199,6 +200,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
     @Override
     public void analyze(@NonNull ImageProxy imageProxy) {
+
         if (tracker == null) return;
         GrayU8 image = ConvertBitmap.bitmapToGray(imageProxy.toBitmap(),(GrayU8)null,analyzeBuffer);
 
@@ -220,13 +222,16 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         }
 
 
-        // effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp());
-
+        Log.d(TAG, "Before Image Callback.");
+        effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp());
+        Log.d(TAG, "After Image Callback.");
 
         Odometry odom = msckf.featureCallback(new FeatureMessage(
                 imageProxy.getImageInfo().getTimestamp(),
                 undistortPoints(active)));
-        if (odom != null) Log.i(TAG, odom.pose.t.toString());
+        //if (odom != null) Log.i(TAG, odom.pose.R.toString() + odom.pose.t.toString());
+
+
 
         imageProxy.close();
 

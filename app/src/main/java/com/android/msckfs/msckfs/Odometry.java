@@ -1,5 +1,7 @@
 package com.android.msckfs.msckfs;
 
+import androidx.annotation.NonNull;
+
 import com.android.msckfs.utils.Isometry3D;
 
 import org.ejml.simple.SimpleMatrix;
@@ -19,5 +21,15 @@ public class Odometry {
         this.pose = pose;
         this.bodyVelocity = bodyVelocity;
         this.camPose = camPose;
+    }
+
+    @Override
+    public String toString() {
+        return "Odometry{" +
+                "timestamp=" + timestamp +
+                ", pose=" + pose +
+                ", bodyVelocity=" + bodyVelocity +
+                ", camPose=" + camPose +
+                '}';
     }
 }

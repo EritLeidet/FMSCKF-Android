@@ -41,4 +41,11 @@ public class Isometry3D {
         return new Isometry3D(R,t);
     }
 
+    @Override
+    public String toString() {
+        return "Isometry3D{" +
+                "R=" + R +
+                ", t=" + t +
+                '}';
+    }
 }
