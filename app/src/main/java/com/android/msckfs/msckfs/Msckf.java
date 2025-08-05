@@ -265,15 +265,27 @@ public class Msckf {
         // Modify the transition matrix
         SimpleMatrix Rkk1 = quaternionToRotation(imuState.orientationNull);
         Phi.insertIntoThis(0,0, quaternionToRotation(imuState.orientation).mult(Rkk1.transpose()));
-        SimpleMatrix u = Rkk1.mult(ImuState.GRAVITY);
+        SimpleMatrix u = Rkk1.mult(ImuState.GRAVITY); // vec3
         SimpleMatrix s = (u.transpose().mult(u)).invert().mult(u.transpose()); // is a row vector in C++ MSCKF-S implementations. Column vector in Python.
         SimpleMatrix A1 = Phi.extractMatrix(6,9,0,3);
-        SimpleMatrix w1 = skewSymmetric(imuState.velocityNull.minus(imuState.velocity)).mult(ImuState.GRAVITY);
-        Phi.insertIntoThis(6,0,A1.minus(A1.mult(u).minus(w1)).mult(s));
+        SimpleMatrix w1 = skewSymmetric(imuState.velocityNull.minus(imuState.velocity)).mult(ImuState.GRAVITY); // vec3
+
+        Phi.insertIntoThis(6,0,
+                A1.minus(
+                        A1
+                                .mult(u) // col vec
+                                .minus(w1) // col vec
+                        .mult(s)));
         SimpleMatrix A2 = Phi.extractMatrix(12,15,0,3);
         SimpleMatrix w2 = skewSymmetric(imuState.velocityNull.scale(dt).plus(imuState.positionNull).minus(imuState.position))
                 .mult(ImuState.GRAVITY);
-        Phi.insertIntoThis(12,0, A2.minus(A2.mult(u).minus(w2)).mult(s));
+        Phi.insertIntoThis(12,0,
+                A2
+                        .minus(
+                                A2
+                                        .mult(u)
+                                        .minus(w2)
+                                        .mult(s)));
 
         // Propogate the state covariance matrix.
         SimpleMatrix Gwrapped = SimpleMatrix.wrap(G);
@@ -283,7 +295,12 @@ public class Msckf {
                 .mult(Gwrapped.transpose())
                 .mult(Phi.transpose())
                 .scale(dt);
-        stateServer.stateCov.insertIntoThis(0,0, Phi.mult(stateServer.stateCov).mult(Phi.transpose()).plus(Q));
+        stateServer.stateCov.insertIntoThis(0,0,
+                Phi
+                        .mult(
+                                stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,0,StateInfo.IMU_STATE_SIZE))
+                        .mult(Phi.transpose())
+                        .plus(Q));
 
         if (!stateServer.camStates.isEmpty()) {
             stateServer.stateCov.insertIntoThis(0, StateInfo.IMU_STATE_SIZE, Phi.mult(

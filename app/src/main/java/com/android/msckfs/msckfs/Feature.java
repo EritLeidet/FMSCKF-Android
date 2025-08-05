@@ -80,9 +80,9 @@ public class Feature {
         // Compute the translation between the first frame and the last frame.
         // We assume the first frame and the last frame will provide the
         // largest motion to speed up the checking process
-        SimpleMatrix translation = lastCamPose.t.minus(firstCamPose.t);
-        SimpleMatrix parallel = translation.mult(featureDirection);
-        SimpleMatrix orthogonalTranslation = translation.minus(parallel.mult(featureDirection)); // vector
+        SimpleMatrix translation = lastCamPose.t.minus(firstCamPose.t); // col vec
+        double parallel = translation.dot(featureDirection);
+        SimpleMatrix orthogonalTranslation = translation.minus(featureDirection.scale(parallel)); // vector
 
         return (orthogonalTranslation.normF() > Config.TRANSLATION_THRESHOLD);
     }
