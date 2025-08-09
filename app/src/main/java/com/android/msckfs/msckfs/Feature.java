@@ -12,6 +12,8 @@ import static org.ejml.dense.row.CommonOps_DDRM.subtract;
 import static java.lang.Double.max;
 import static java.lang.Double.min;
 
+import android.util.Log;
+
 import com.android.msckfs.utils.Isometry3D;
 import com.android.msckfs.utils.MathUtils;
 
@@ -52,9 +54,15 @@ public class Feature {
         this.id = id;
     }
 
+    private static String TAG = "MSCKF";
+
     @SuppressWarnings({"ConstantConditions", "BooleanMethodIsAlwaysInverted"}) // suppress false null pointer warnings
     public boolean checkMotion(Map<Integer, CamState> camStates) {
-        if (observations.size() < 2) return false;
+        if (observations.size() < 2) {
+            Log.d(TAG, "removeOldCamStates: checkMotion failed. observations.size() < 2");
+            return false;
+        }
+
 
         Integer firstId = observations.firstKey();
         Integer lastId = observations.lastKey();

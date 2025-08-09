@@ -19,7 +19,7 @@ public class ImuState extends State {
 
     //public final static Vector gravity;
 
-    public SimpleMatrix orientation; // Quaternion
+    public SimpleMatrix orientation = new SimpleMatrix(new double[]{0,0,0,1}); // Quaternion
 
     public SimpleMatrix orientationNull = new SimpleMatrix(new double[]{0,0,0,1}); // Quaternion
 

@@ -13,4 +13,13 @@ public class ImuMessage {
         this.linearAcceleration = new SimpleMatrix(linearAcceleration);
         this.timestamp = timestamp;
     }
+
+    @Override
+    public String toString() {
+        return "ImuMessage{" +
+                "angularVelocity=" + angularVelocity +
+                ", linearAcceleration=" + linearAcceleration +
+                ", timestamp=" + timestamp +
+                '}';
+    }
 }

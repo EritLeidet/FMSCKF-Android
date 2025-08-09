@@ -229,7 +229,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         Odometry odom = msckf.featureCallback(new FeatureMessage(
                 imageProxy.getImageInfo().getTimestamp(),
                 undistortPoints(active)));
-        //if (odom != null) Log.i(TAG, odom.pose.R.toString() + odom.pose.t.toString());
+        if (odom != null) Log.i(TAG, odom.pose.R.toString() + odom.pose.t.toString());
 
 
 

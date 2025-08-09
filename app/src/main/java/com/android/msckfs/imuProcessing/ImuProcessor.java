@@ -31,7 +31,7 @@ public class ImuProcessor implements SensorEventListener {
         mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
 
         mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        mAcc = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        mAcc = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 
         // TODO: what is a reasonable sensor delay for vr?
         mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
@@ -65,15 +65,16 @@ public class ImuProcessor implements SensorEventListener {
     public void onSensorChanged(SensorEvent sensorEvent) {
         if (sensorEvent.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
             angVel = sensorEvent.values;
-        } else if (sensorEvent.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+        } else if (sensorEvent.sensor.getType() == Sensor.TYPE_ACCELEROMETER) { // TODO: normal ACC, not linear?
             linAcc = sensorEvent.values;
         }
 
         if (angVel != null && linAcc != null) {
             // TODO: reset angVel and linAcc to null? So that almost synchronized?
             msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
+            // msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
 
-            //Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
+            Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
         }
 
     }

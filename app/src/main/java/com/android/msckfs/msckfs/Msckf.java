@@ -21,6 +21,7 @@ import static org.ejml.dense.row.NormOps_DDRM.normF;
 import static java.lang.Math.cos;
 import static java.lang.Math.pow;
 import static java.lang.Math.sin;
+import static java.lang.Thread.sleep;
 
 import android.util.Log;
 
@@ -195,10 +196,13 @@ public class Msckf {
 
         // Noise related parameters (Use variance instead of standard deviation)
 
-        static final double GYRO_NOISE = pow(0.005, 2);
-        static final double ACC_NOISE = pow(0.05,2);
-        static final double GYRO_BIAS_NOISE = pow(0.001,2);
-        static final double ACC_BIAS_NOISE = pow(0.01,2);
+        // TODO: undo my changes to the noise
+
+        static final int more = 1;
+        static final double GYRO_NOISE = pow(0.005, 2) * more;
+        static final double ACC_NOISE = pow(0.05,2) * more;
+        static final double GYRO_BIAS_NOISE = pow(0.001,2) * more;
+        static final double ACC_BIAS_NOISE = pow(0.01,2) * more;
         static final double OBSERVATION_NOISE = pow(0.035,2);
 
         // Initial state
@@ -207,11 +211,11 @@ public class Msckf {
         // The initial covariance of orientation and position can be
         // set to 0. But for velocity, bias and extrinsic parameters,
         // there should be nontrivial uncertainty
-        static final double VELOCITY_COV = 0.25;
-        static final double GYRO_BIAS_COV = 0.01;
-        static final double ACC_BIAS_COV = 0.01;
-        static final double EXTRINSIC_ROTATION_COV = 3.0462e-4;
-        static final double EXTRINSIC_TRANSLATION_COV = 2.5e-5;
+        static final double VELOCITY_COV = 0.25 * more;
+        static final double GYRO_BIAS_COV = 0.01 * more;
+        static final double ACC_BIAS_COV = 0.01 * more;
+        static final double EXTRINSIC_ROTATION_COV = 3.0462e-4 * more;
+        static final double EXTRINSIC_TRANSLATION_COV = 2.5e-5 * more;
 
 
         // calibration parameters
@@ -236,6 +240,8 @@ public class Msckf {
      *
      */
     public void processModel(double time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
+
+        final String localTag = "processModel";
         ImuState imuState = stateServer.imuState;
 
         SimpleMatrix gyro = mGyro.minus(imuState.gyroBias);
@@ -268,7 +274,8 @@ public class Msckf {
         SimpleMatrix u = Rkk1.mult(ImuState.GRAVITY); // vec3
         SimpleMatrix s = (u.transpose().mult(u)).invert().mult(u.transpose()); // is a row vector in C++ MSCKF-S implementations. Column vector in Python.
         SimpleMatrix A1 = Phi.extractMatrix(6,9,0,3);
-        SimpleMatrix w1 = skewSymmetric(imuState.velocityNull.minus(imuState.velocity)).mult(ImuState.GRAVITY); // vec3
+        SimpleMatrix w1 = skewSymmetric(imuState.velocityNull.minus(imuState.velocity))
+                .mult(ImuState.GRAVITY); // vec3
 
         Phi.insertIntoThis(6,0,
                 A1.minus(
@@ -286,7 +293,6 @@ public class Msckf {
                                         .mult(u)
                                         .minus(w2)
                                         .mult(s)));
-
         // Propogate the state covariance matrix.
         SimpleMatrix Gwrapped = SimpleMatrix.wrap(G);
         SimpleMatrix Q = Phi
@@ -295,10 +301,10 @@ public class Msckf {
                 .mult(Gwrapped.transpose())
                 .mult(Phi.transpose())
                 .scale(dt);
+        Log.d(localTag, "Q: " + Q);
         stateServer.stateCov.insertIntoThis(0,0,
                 Phi
-                        .mult(
-                                stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,0,StateInfo.IMU_STATE_SIZE))
+                        .mult(stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,0,StateInfo.IMU_STATE_SIZE))
                         .mult(Phi.transpose())
                         .plus(Q));
 
@@ -325,7 +331,6 @@ public class Msckf {
         if (!isGravitySet && imuBuffer.size() >= 200) {
             initializeGravityAndBias();
             this.isGravitySet = true;
-            Log.d(TAG, "Set gravity and bias!");
         }
     }
 
@@ -348,6 +353,7 @@ public class Msckf {
 
             stateServer.imuState.gyroBias = SimpleMatrix.wrap(sumAngVel).divide(imuBuffer.size());
 
+
             // Find the gravity in the IMU frame.
             gravityImu = SimpleMatrix.wrap(sumLinearAcc).divide(imuBuffer.size());
         }
@@ -359,8 +365,13 @@ public class Msckf {
         // Initialize the initial orientation, so that the estimation
         // is consistent with the inertial frame.
         stateServer.imuState.orientation = fromTwoVectors(ImuState.GRAVITY, gravityImu);
+        Log.e(TAG, "Initial orientation:" + stateServer.imuState.orientation);
+        Log.e(TAG, "Initial orientation:" + quaternionToRotation(stateServer.imuState.orientation)
+                        .mult(new SimpleMatrix(new double[]{1,0,0})));
     }
 
+
+    private int featureCallbackDebugCt = 0;
 
     public Odometry featureCallback(FeatureMessage featureMsg) {
         if (!this.isGravitySet) return null;
@@ -370,23 +381,30 @@ public class Msckf {
             stateServer.imuState.timestamp = featureMsg.timestamp;
         }
 
+
         // Propogate the IMU state.
         // that are received before the image msg.
+        Log.e("predictNewState", "pos before:" + stateServer.imuState.position);
         batchImuProcessing(featureMsg.timestamp);
+        Log.e("predictNewState", "pos after:" + stateServer.imuState.position);
+
+        assert(featureCallbackDebugCt != 1);
+        featureCallbackDebugCt++;
+
 
         // Augment the state vector.
-        stateAugmentation(featureMsg.timestamp);
+        // TODO: uncomment stateAugmentation(featureMsg.timestamp);
 
         // Add new observations for existing features or new features
         // in the map server.
-        addFeatureObservations(featureMsg);
+        // TODO: uncomment addFeatureObservations(featureMsg);
 
         // Perform measurement update if necessary.
         // And prune features
-        removeLostFeatures();
+        // TODO: uncomment removeLostFeatures();
 
         // Prune camera states.
-        removeOldCamStates();
+        // TODO: uncomment removeOldCamStates();
 
         // Publish the odometry.
         return publish(featureMsg.timestamp);
@@ -397,7 +415,6 @@ public class Msckf {
 
     private Odometry publish(double time) {
         ImuState imuState = stateServer.imuState;
-        //Log.d(TAG, imuState.toString());
 
         Isometry3D Tiw = new Isometry3D(
                 quaternionToRotation(imuState.orientation).transpose(),
@@ -435,8 +452,7 @@ public class Msckf {
      */
     private void removeOldCamStates() {
         if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
-
-        //Log.d(TAG, "Removing old Cam States. (stateServer.camStates.size() >= Config.MAX_CAM_STATES)");
+        Log.d("PredictNewState", "Removing old Cam States. (stateServer.camStates.size() >= Config.MAX_CAM_STATES)");
 
         // Find two camera states to be removed. Here we choose the oldest two.
         List<Integer> rmCamStateIds = new ArrayList<>(2);
@@ -452,6 +468,7 @@ public class Msckf {
             }
 
             if (involvedCamStateIds.isEmpty()) continue;
+
             if (involvedCamStateIds.size() == 1) {
                 feature.observations.remove(involvedCamStateIds.get(0));
                 continue;
@@ -460,6 +477,7 @@ public class Msckf {
             if (!feature.isInitialized) {
                 // Ensure there is enough translation to triangulate the feature
                 if (!feature.checkMotion(stateServer.camStates)) {
+
                     // If the feature cannot be initialized, just remove
                     // the observations associated with the camera states
                     // to be removed.
@@ -472,6 +490,7 @@ public class Msckf {
                 // Intialize the feature position based on all current available measurements.
                 boolean ret = feature.initializePosition(stateServer.camStates);
                 if (!ret) {
+                    Log.d(TAG, "removeOldCamStates: initializePosition failed.");
                     for (Integer camId : involvedCamStateIds) {
                         feature.observations.remove(camId);
                     }
@@ -480,6 +499,8 @@ public class Msckf {
             }
             jacobianRowSize += 2 * involvedCamStateIds.size() - 3;
         }
+
+        //if (jacobianRowSize == 0) Log.d(TAG, "removeOldCamStates: jacobianRowSize == 0");
 
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
@@ -496,12 +517,15 @@ public class Msckf {
                 if (feature.observations.containsKey(camId)) involvedCamStateIds.add(camId);
             }
 
-            if (involvedCamStateIds.isEmpty()) continue;
+            if (involvedCamStateIds.isEmpty()) {
+                continue;
+            }
 
 
             featureJacobian(feature, involvedCamStateIds, Hxj, rj);
 
             if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
+                Log.d(TAG, "removeOldCamStates: failed gating test.");
                 Hx.insertIntoThis(stackCount, 0, Hxj);
                 r.insertIntoThis(stackCount, 0, rj);
                 stackCount += Hxj.getNumRows();
@@ -517,6 +541,7 @@ public class Msckf {
 
         // Perform measurment update.
         Log.d(TAG, "removeOldCamStates Hx, r" + Hx + r);
+        Log.d(TAG, "removeOldCamStates called measurementUpdate");
         measurementUpdate(Hx, r);
 
         for (Integer camId : rmCamStateIds) {
@@ -543,10 +568,12 @@ public class Msckf {
         for (Feature feature : stateServer.mapServer.values()) {
             // Pass the features that are still being tracked
             if (feature.observations.containsKey(stateServer.imuState.id)) {
+                //Log.d(TAG, "continue 1: containsKey");
                 continue;
             }
 
             if (feature.observations.size() < 3) {
+                //Log.d(TAG, "continue 2: observations < 3");
                 invalidFeatureIds.add(feature.id);
                 continue;
             }
@@ -557,6 +584,7 @@ public class Msckf {
                     // If the feature cannot be initialized, just remove
                     // the observations associated with the camera states
                     // to be removed.
+                    //Log.d(TAG, "continue 3: checkMotion failed.");
                     invalidFeatureIds.add(feature.id);
                     continue;
                 }
@@ -564,6 +592,7 @@ public class Msckf {
                 // Intialize the feature position based on all current available measurements.
                 boolean ret = feature.initializePosition(stateServer.camStates);
                 if (!ret) {
+                    //Log.d(TAG, "continue 4: initializePosition failed");
                     invalidFeatureIds.add(feature.id);
                     continue;
                 }
@@ -609,6 +638,7 @@ public class Msckf {
 
         // Perform the measurement update step.
         Log.d(TAG, "removeLostFeatures Hx, r" + Hx + r);
+        Log.d(TAG, "removeLostFeatures called measurementUpdate");
         measurementUpdate(Hx, r);
 
         // Remove all processed features from the map.
@@ -640,6 +670,8 @@ public class Msckf {
 
     private void batchImuProcessing(double timeBound) {
         int usedImuMsgCt = 0;
+        final String localTag = "PredictNewState";
+
 
         synchronized (imuBuffer) {
             for (ImuMessage imuMsg : imuBuffer) {
@@ -647,18 +679,25 @@ public class Msckf {
                     usedImuMsgCt++;
                     continue;
                 }
-                if (imuMsg.timestamp > timeBound) break;
+                if (imuMsg.timestamp > timeBound) {
+                    break;
+                }
+                Log.d(localTag, usedImuMsgCt + "/ Position before:" + stateServer.imuState.position);
                 processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
+                Log.d(localTag, usedImuMsgCt + "/ Position after:" + stateServer.imuState.position);
                 usedImuMsgCt++;
             }
         }
 
-
         stateServer.imuState.id = ImuState.nextId;
         ImuState.nextId += 1;
 
+
+
         // Remove all used IMU msgs.
         synchronized (imuBuffer) {imuBuffer.subList(0,usedImuMsgCt).clear();}
+
+
 
     }
 
@@ -682,29 +721,36 @@ public class Msckf {
         SimpleMatrix tcw = stateServer.imuState.position.plus(Rwi.transpose().mult(tci));
         CamState camState = new CamState(stateServer.imuState.id, timestamp);
         camState.orientation = rotationToQuaternion(Rwc);
+
         camState.position.setTo(tcw);
         camState.orientationNull.setTo(camState.orientation);
+
         camState.positionNull.setTo(camState.position);
         stateServer.camStates.put(stateServer.imuState.id, camState);
 
         // Update the covariance matrix of the state.
-        J.zero();
-        insert(Ric.getDDRM(),J,0,0);
-        insert(identity(3), J,0,15);
-        insert(skewSymmetric(Rwi.transpose().mult(tci).getDDRM()), J,3,0);
-        insert(identity(3),J,3,12);
-        insert(Rwi.transpose().getDDRM(),J,3,18);
+        SimpleMatrix J = new SimpleMatrix(StateInfo.CAM_STATE_SIZE, StateInfo.IMU_STATE_SIZE);
+        J.insertIntoThis(0,0,Ric);
+        J.insertIntoThis(0,15, SimpleMatrix.identity(3));
+        J.insertIntoThis(3,0, skewSymmetric(Rwi.transpose().mult(tci)));
+        J.insertIntoThis(3,12, SimpleMatrix.identity(3));
+        J.insertIntoThis(3,18, Rwi.transpose());
 
         // Resize the state covariance matrix.
         int oldSize = stateServer.stateCov.getNumRows();
         int newSize = oldSize + 6;
-        SimpleMatrix augmentationMatrix = SimpleMatrix.wrap(identity(newSize,oldSize));
-        augmentationMatrix.insertIntoThis(oldSize,0,SimpleMatrix.wrap(J));
+        SimpleMatrix augmentedMatrix = SimpleMatrix.identity(newSize); // TODO: difference Python, C++
 
-        SimpleMatrix newCovariance = augmentationMatrix.mult(stateServer.stateCov).mult(augmentationMatrix.transpose());
+        SimpleMatrix P11 = stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,0,StateInfo.IMU_STATE_SIZE);
+
+        // Fill in the augmented state covariance
+        SimpleMatrix r1 = J.mult(P11);
+        augmentedMatrix.insertIntoThis(oldSize, 0, r1);
+        augmentedMatrix.insertIntoThis(0,oldSize, r1.transpose());
+        augmentedMatrix.insertIntoThis(oldSize,oldSize, J.mult(P11).mult(J.transpose()));
 
         // Fix the covariance to be symmetric
-        stateServer.stateCov = newCovariance.plus(newCovariance.transpose()).scale(0.5);
+        stateServer.stateCov = augmentedMatrix.plus(augmentedMatrix.transpose()).scale(0.5);
 
 
     }
@@ -721,6 +767,7 @@ public class Msckf {
      * Update the state vector given a deltaX computed from a measurement update.
      */
     public void measurementUpdate(SimpleMatrix H, SimpleMatrix r) {
+
 
         // Check if H and r are empty
         if (H.getNumElements() == 0 || r.getNumElements() == 0) return;
@@ -844,8 +891,6 @@ public class Msckf {
         // Project the residual and Jacobians onto the nullspace of H_fj.
         // svd of H_fj
         SimpleMatrix U = Hfj.svd().getU(); // Shape (m x m), m = Hfj.numRows = jacobianRowSize
-        //Log.d(TAG, "JacobianRowSize: " + jacobianRowSize);
-        //Log.d(TAG, String.format("U matrix dimensions: (%d, %d)", U.getNumRows(), U.getNumCols()));
         SimpleMatrix A = U.cols(jacobianRowSize - 3, SimpleMatrix.END); // Shape (m, 3)
 
         Hx.setTo(A.transpose().mult(Hxj));
@@ -928,6 +973,9 @@ public class Msckf {
         double gyroNorm = gyro.normF();
         SimpleMatrix omega = calcOmega(gyro);
 
+        final String localTag = "predictNewState";
+
+
         SimpleMatrix q = stateServer.imuState.orientation;
         SimpleMatrix v = stateServer.imuState.velocity;
         SimpleMatrix p = stateServer.imuState.position;
@@ -992,10 +1040,16 @@ public class Msckf {
         p = p.plus(k1pDot.plus(k2pDot.scale(2)).plus(k3pDot.scale(2)).plus(k4pDot).scale(dt/6));
 
         stateServer.imuState.orientation = q;
-        stateServer.imuState.position = v;
-        stateServer.imuState.velocity = p;
+        Log.d(localTag, debugCt + "/ predictNewState position before: " + p);
+        stateServer.imuState.position = p;
+        Log.d(localTag, debugCt + "/ predictNewState orientation after: " + p);
+
+        stateServer.imuState.velocity = v;
+        debugCt++;
 
     }
+
+    private int debugCt = 0;
 
 
 

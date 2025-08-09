@@ -3,7 +3,7 @@ package com.android.msckfs.imageProcessing;
 import boofcv.abst.feature.detect.interest.ConfigHarrisCorner;
 import boofcv.struct.calib.CameraPinholeBrown;
 
-// Pro tip: Run in app fast or release mode for a dramatic speed up!
+// Pro tip: Run in app fast or release mode for a dramatic speed up! // TODO
 // In Android Studio expand "Build Variants" tab on left.
 
 // based on BoofCV Android demo: https://github.com/lessthanoptimal/BoofAndroidDemo/tree/SNAPSHOT
