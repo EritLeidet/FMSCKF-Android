@@ -4,6 +4,7 @@ import static com.android.msckfs.utils.MathUtils.deletedRows;
 import static com.android.msckfs.utils.MathUtils.fromTwoVectors;
 import static com.android.msckfs.utils.MathUtils.quaternionMultiplication;
 import static com.android.msckfs.utils.MathUtils.quaternionNormalize;
+import static com.android.msckfs.utils.MathUtils.quaternionToPoint;
 import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
 import static com.android.msckfs.utils.MathUtils.rotationToQuaternion;
 import static com.android.msckfs.utils.MathUtils.skewSymmetric;
@@ -239,14 +240,14 @@ public class Msckf {
     /**
      *
      */
-    public void processModel(double time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
+    public void processModel(long time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
 
         final String localTag = "processModel";
         ImuState imuState = stateServer.imuState;
 
         SimpleMatrix gyro = mGyro.minus(imuState.gyroBias);
         SimpleMatrix acc = mAcc.minus(imuState.accBias);
-        double dt = time - imuState.timestamp;
+        long dt = time - imuState.timestamp;
 
         // Compute discrete transition F, G matrices in Appendix A in "MSCKF" paper
         calcF(gyro, acc);
@@ -323,6 +324,9 @@ public class Msckf {
         stateServer.imuState.orientationNull = imuState.orientation;
         stateServer.imuState.positionNull = imuState.position;
         stateServer.imuState.velocityNull = imuState.velocity;
+
+        // Update the state info
+        stateServer.imuState.timestamp = time;
     }
 
     public void imuCallback(ImuMessage imuMsg) {
@@ -682,6 +686,8 @@ public class Msckf {
                 if (imuMsg.timestamp > timeBound) {
                     break;
                 }
+                Log.d("imuTime", usedImuMsgCt + "/ ImuMsg.timestamp: " + imuMsg.timestamp +
+                        "imuState.timestamp: " + stateServer.imuState.timestamp);
                 Log.d(localTag, usedImuMsgCt + "/ Position before:" + stateServer.imuState.position);
                 processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
                 Log.d(localTag, usedImuMsgCt + "/ Position after:" + stateServer.imuState.position);
@@ -980,6 +986,8 @@ public class Msckf {
         SimpleMatrix v = stateServer.imuState.velocity;
         SimpleMatrix p = stateServer.imuState.position;
 
+        Log.d(localTag, debugCt + "/ velocity before: " + v);
+
         SimpleMatrix dqDt, dqDt2;
         if (gyroNorm > 0.00005) {
             dqDt = SimpleMatrix
@@ -1018,12 +1026,12 @@ public class Msckf {
         SimpleMatrix k1pDot = v;
 
         // k2 = f(tn+dt/2, yn+k1*dt/2)
-        SimpleMatrix k1v = v.plus(k1vDot.scale(dt/2));
+        SimpleMatrix k1v = v.plus(k1vDot.scale(dt).divide(2));
         SimpleMatrix k2vDot = drDt2Transpose.mult(acc).plus(ImuState.GRAVITY);
         SimpleMatrix k2pDot = k1v;
 
         // k3 = f(tn+dt/2, yn+k2*dt/2)
-        SimpleMatrix k2v = v.plus(k2vDot).scale(dt/2);
+        SimpleMatrix k2v = v.plus(k2vDot.scale(dt).divide(2));
         SimpleMatrix k3vDot = drDt2Transpose.mult(acc).plus(ImuState.GRAVITY);
         SimpleMatrix k3pDot = k2v;
 
@@ -1035,14 +1043,26 @@ public class Msckf {
         // yn+1 = yn + dt/6*(k1+2*k2+2*k3+k4)
         q = quaternionNormalize(dqDt);
 
+
+        Log.d(localTag, "dt=" + dt +
+                ", v=" + v +
+                ", k1vDot=" + k1vDot +
+                ", k2vDot=" + k2vDot +
+                ", k3vDot=" + k3vDot +
+                ", k4vDot=" + k4vDot +
+                ", k4vDot.scale(dt/6)=" + k4vDot.scale(dt/6)
+        );
+
+
         // update the imu state
         v = v.plus(k1vDot.plus(k2vDot.scale(2)).plus(k3vDot.scale(2)).plus(k4vDot).scale(dt/6));
         p = p.plus(k1pDot.plus(k2pDot.scale(2)).plus(k3pDot.scale(2)).plus(k4pDot).scale(dt/6));
 
+        //Log.d(localTag, debugCt + "/ orientation before: " + quaternionToPoint(q));
         stateServer.imuState.orientation = q;
-        Log.d(localTag, debugCt + "/ predictNewState position before: " + p);
+        //Log.d(localTag, debugCt + "/ predictNewState position before: " + p);
         stateServer.imuState.position = p;
-        Log.d(localTag, debugCt + "/ predictNewState orientation after: " + p);
+
 
         stateServer.imuState.velocity = v;
         debugCt++;

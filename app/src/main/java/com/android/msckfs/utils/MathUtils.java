@@ -4,6 +4,8 @@ package com.android.msckfs.utils;
 import static org.ejml.dense.row.NormOps_DDRM.normF;
 import static java.lang.Math.sqrt;
 
+import android.util.Log;
+
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.dense.row.CommonOps_DDRM;
 import org.ejml.simple.SimpleMatrix;
@@ -219,6 +221,12 @@ public class MathUtils {
         con.insertIntoThis(0,0, q.negative().rows(0,3));
         con.set(3, q.get(3));
         return con;
+
+    }
+
+    public static SimpleMatrix quaternionToPoint(SimpleMatrix q) {
+        Log.d("MathUtils", q.toString());
+        return quaternionToRotation(q).mult(new SimpleMatrix(new double[]{1,0,0}));
 
     }
 

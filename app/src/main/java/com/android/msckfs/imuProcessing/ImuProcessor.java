@@ -30,8 +30,8 @@ public class ImuProcessor implements SensorEventListener {
         this.msckf = msckf;
         mSensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
 
-        mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        mAcc = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED);
+        mAcc = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER_UNCALIBRATED);
 
         // TODO: what is a reasonable sensor delay for vr?
         mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
@@ -63,16 +63,16 @@ public class ImuProcessor implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
-        if (sensorEvent.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
-            angVel = sensorEvent.values;
-        } else if (sensorEvent.sensor.getType() == Sensor.TYPE_ACCELEROMETER) { // TODO: normal ACC, not linear?
-            linAcc = sensorEvent.values;
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_GYROSCOPE_UNCALIBRATED) {
+            angVel = Arrays.copyOfRange(sensorEvent.values,0,3);
+        } else if (sensorEvent.sensor.getType() == Sensor.TYPE_ACCELEROMETER_UNCALIBRATED) { // TODO: normal ACC, not linear?
+            linAcc = Arrays.copyOfRange(sensorEvent.values, 0,3);
         }
 
         if (angVel != null && linAcc != null) {
             // TODO: reset angVel and linAcc to null? So that almost synchronized?
-            msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
-            // msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
+            // msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
+            msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
 
             Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
         }
