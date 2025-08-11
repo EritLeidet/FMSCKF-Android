@@ -22,6 +22,10 @@ import java.util.List;
 // Convention used by Apache Commons Quaternion class: [w(scalar),x,y,z]
 public class MathUtils {
 
+    public static final String TAG = "MathUtils";
+
+    public static final double NANOSECOND_TO_SECOND = 1e-9;
+
     // own work.
     public static DMatrixRMaj scale(double alpha, DMatrixRMaj m) {
         DMatrixRMaj out = new DMatrixRMaj();
@@ -199,8 +203,8 @@ public class MathUtils {
                 axis = cross(
                         new SimpleMatrix(new double[]{0,1,0}),
                         v0);
-                q.insertIntoThis(0,0,axis);
             }
+            q.insertIntoThis(0,0,axis);
         } else if (d > 0.999999) {
             q = new SimpleMatrix(new double[]{0,0,0,1});
         } else {

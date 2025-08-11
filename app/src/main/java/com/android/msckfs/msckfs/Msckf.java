@@ -191,7 +191,7 @@ public class Msckf {
 
 
     private static class Config {
-        static final double GRAVITY_ACC = 9.81;
+        static final double GRAVITY_ACC = 9.81f;
         static final SimpleMatrix GRAVITY = new SimpleMatrix(new double[] {0.0,0.0,-GRAVITY_ACC});
         static final int MAX_CAM_STATES = 20;
 
@@ -240,14 +240,14 @@ public class Msckf {
     /**
      *
      */
-    public void processModel(long time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
+    public void processModel(double time, SimpleMatrix mGyro, SimpleMatrix mAcc) {
 
         final String localTag = "processModel";
         ImuState imuState = stateServer.imuState;
 
         SimpleMatrix gyro = mGyro.minus(imuState.gyroBias);
         SimpleMatrix acc = mAcc.minus(imuState.accBias);
-        long dt = time - imuState.timestamp;
+        double dt = time - imuState.time;
 
         // Compute discrete transition F, G matrices in Appendix A in "MSCKF" paper
         calcF(gyro, acc);
@@ -302,7 +302,6 @@ public class Msckf {
                 .mult(Gwrapped.transpose())
                 .mult(Phi.transpose())
                 .scale(dt);
-        Log.d(localTag, "Q: " + Q);
         stateServer.stateCov.insertIntoThis(0,0,
                 Phi
                         .mult(stateServer.stateCov.extractMatrix(0,StateInfo.IMU_STATE_SIZE,0,StateInfo.IMU_STATE_SIZE))
@@ -326,7 +325,7 @@ public class Msckf {
         stateServer.imuState.velocityNull = imuState.velocity;
 
         // Update the state info
-        stateServer.imuState.timestamp = time;
+        stateServer.imuState.time = time;
     }
 
     public void imuCallback(ImuMessage imuMsg) {
@@ -365,13 +364,9 @@ public class Msckf {
         // Normalize the gravity and save to IMUState
         double gravNorm = gravityImu.normF();
         ImuState.GRAVITY = new SimpleMatrix(new double[] {0.0, 0.0, -gravNorm});
-
         // Initialize the initial orientation, so that the estimation
         // is consistent with the inertial frame.
-        stateServer.imuState.orientation = fromTwoVectors(ImuState.GRAVITY, gravityImu);
-        Log.e(TAG, "Initial orientation:" + stateServer.imuState.orientation);
-        Log.e(TAG, "Initial orientation:" + quaternionToRotation(stateServer.imuState.orientation)
-                        .mult(new SimpleMatrix(new double[]{1,0,0})));
+        stateServer.imuState.orientation = fromTwoVectors(ImuState.GRAVITY.negative(), gravityImu);
     }
 
 
@@ -382,36 +377,36 @@ public class Msckf {
 
         if (isFirstImg) {
             isFirstImg = false;
-            stateServer.imuState.timestamp = featureMsg.timestamp;
+            stateServer.imuState.time = featureMsg.time;
         }
 
 
         // Propogate the IMU state.
         // that are received before the image msg.
         Log.e("predictNewState", "pos before:" + stateServer.imuState.position);
-        batchImuProcessing(featureMsg.timestamp);
+        batchImuProcessing(featureMsg.time);
         Log.e("predictNewState", "pos after:" + stateServer.imuState.position);
 
-        assert(featureCallbackDebugCt != 1);
+        //assert(featureCallbackDebugCt != 2);
         featureCallbackDebugCt++;
 
 
         // Augment the state vector.
-        // TODO: uncomment stateAugmentation(featureMsg.timestamp);
+        stateAugmentation(featureMsg.time);
 
         // Add new observations for existing features or new features
         // in the map server.
-        // TODO: uncomment addFeatureObservations(featureMsg);
+        addFeatureObservations(featureMsg);
 
         // Perform measurement update if necessary.
         // And prune features
-        // TODO: uncomment removeLostFeatures();
+        removeLostFeatures();
 
         // Prune camera states.
-        // TODO: uncomment removeOldCamStates();
+        removeOldCamStates();
 
         // Publish the odometry.
-        return publish(featureMsg.timestamp);
+        return publish(featureMsg.time);
 
     }
 
@@ -456,8 +451,6 @@ public class Msckf {
      */
     private void removeOldCamStates() {
         if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
-        Log.d("PredictNewState", "Removing old Cam States. (stateServer.camStates.size() >= Config.MAX_CAM_STATES)");
-
         // Find two camera states to be removed. Here we choose the oldest two.
         List<Integer> rmCamStateIds = new ArrayList<>(2);
         rmCamStateIds.add(stateServer.camStates.get(0));
@@ -494,7 +487,6 @@ public class Msckf {
                 // Intialize the feature position based on all current available measurements.
                 boolean ret = feature.initializePosition(stateServer.camStates);
                 if (!ret) {
-                    Log.d(TAG, "removeOldCamStates: initializePosition failed.");
                     for (Integer camId : involvedCamStateIds) {
                         feature.observations.remove(camId);
                     }
@@ -503,8 +495,6 @@ public class Msckf {
             }
             jacobianRowSize += 2 * involvedCamStateIds.size() - 3;
         }
-
-        //if (jacobianRowSize == 0) Log.d(TAG, "removeOldCamStates: jacobianRowSize == 0");
 
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
@@ -529,7 +519,6 @@ public class Msckf {
             featureJacobian(feature, involvedCamStateIds, Hxj, rj);
 
             if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
-                Log.d(TAG, "removeOldCamStates: failed gating test.");
                 Hx.insertIntoThis(stackCount, 0, Hxj);
                 r.insertIntoThis(stackCount, 0, rj);
                 stackCount += Hxj.getNumRows();
@@ -544,8 +533,6 @@ public class Msckf {
         r = r.rows(0,stackCount);
 
         // Perform measurment update.
-        Log.d(TAG, "removeOldCamStates Hx, r" + Hx + r);
-        Log.d(TAG, "removeOldCamStates called measurementUpdate");
         measurementUpdate(Hx, r);
 
         for (Integer camId : rmCamStateIds) {
@@ -572,12 +559,10 @@ public class Msckf {
         for (Feature feature : stateServer.mapServer.values()) {
             // Pass the features that are still being tracked
             if (feature.observations.containsKey(stateServer.imuState.id)) {
-                //Log.d(TAG, "continue 1: containsKey");
                 continue;
             }
 
             if (feature.observations.size() < 3) {
-                //Log.d(TAG, "continue 2: observations < 3");
                 invalidFeatureIds.add(feature.id);
                 continue;
             }
@@ -588,7 +573,6 @@ public class Msckf {
                     // If the feature cannot be initialized, just remove
                     // the observations associated with the camera states
                     // to be removed.
-                    //Log.d(TAG, "continue 3: checkMotion failed.");
                     invalidFeatureIds.add(feature.id);
                     continue;
                 }
@@ -596,7 +580,6 @@ public class Msckf {
                 // Intialize the feature position based on all current available measurements.
                 boolean ret = feature.initializePosition(stateServer.camStates);
                 if (!ret) {
-                    //Log.d(TAG, "continue 4: initializePosition failed");
                     invalidFeatureIds.add(feature.id);
                     continue;
                 }
@@ -613,9 +596,7 @@ public class Msckf {
         }
 
         // Return if there is no lost feature to be processed.
-        Log.d(TAG, "RemoveLostFeatures: checking if processFeatures.isEmpty.");
         if (processedFeatures.isEmpty()) return;
-        Log.d(TAG, "RemoveLostFeatures: !processedFeatures.isEmpty");
 
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
@@ -641,8 +622,6 @@ public class Msckf {
         r.reshape(stackCount, 1);
 
         // Perform the measurement update step.
-        Log.d(TAG, "removeLostFeatures Hx, r" + Hx + r);
-        Log.d(TAG, "removeLostFeatures called measurementUpdate");
         measurementUpdate(Hx, r);
 
         // Remove all processed features from the map.
@@ -679,18 +658,14 @@ public class Msckf {
 
         synchronized (imuBuffer) {
             for (ImuMessage imuMsg : imuBuffer) {
-                if (imuMsg.timestamp < stateServer.imuState.timestamp) {
+                if (imuMsg.time < stateServer.imuState.time) {
                     usedImuMsgCt++;
                     continue;
                 }
-                if (imuMsg.timestamp > timeBound) {
+                if (imuMsg.time > timeBound) {
                     break;
                 }
-                Log.d("imuTime", usedImuMsgCt + "/ ImuMsg.timestamp: " + imuMsg.timestamp +
-                        "imuState.timestamp: " + stateServer.imuState.timestamp);
-                Log.d(localTag, usedImuMsgCt + "/ Position before:" + stateServer.imuState.position);
-                processModel(imuMsg.timestamp, imuMsg.angularVelocity, imuMsg.linearAcceleration);
-                Log.d(localTag, usedImuMsgCt + "/ Position after:" + stateServer.imuState.position);
+                processModel(imuMsg.time, imuMsg.angularVelocity, imuMsg.linearAcceleration);
                 usedImuMsgCt++;
             }
         }
@@ -716,7 +691,7 @@ public class Msckf {
     /**
      * Generates a new camera state and adds it to the full state and covariance.
      */
-    public void stateAugmentation(long timestamp) {
+    public void stateAugmentation(double time) {
         // Get the imu_state, rotation from imu to cam, and translation from cam to imu
         SimpleMatrix Ric = stateServer.imuState.rImuCam;
         SimpleMatrix tci = stateServer.imuState.tCamImu;
@@ -725,7 +700,7 @@ public class Msckf {
         SimpleMatrix Rwi = quaternionToRotation(stateServer.imuState.orientation);
         SimpleMatrix Rwc = Ric.mult(Rwi);
         SimpleMatrix tcw = stateServer.imuState.position.plus(Rwi.transpose().mult(tci));
-        CamState camState = new CamState(stateServer.imuState.id, timestamp);
+        CamState camState = new CamState(stateServer.imuState.id, time);
         camState.orientation = rotationToQuaternion(Rwc);
 
         camState.position.setTo(tcw);
@@ -986,7 +961,6 @@ public class Msckf {
         SimpleMatrix v = stateServer.imuState.velocity;
         SimpleMatrix p = stateServer.imuState.position;
 
-        Log.d(localTag, debugCt + "/ velocity before: " + v);
 
         SimpleMatrix dqDt, dqDt2;
         if (gyroNorm > 0.00005) {
@@ -1025,6 +999,7 @@ public class Msckf {
                 .plus(ImuState.GRAVITY);
         SimpleMatrix k1pDot = v;
 
+
         // k2 = f(tn+dt/2, yn+k1*dt/2)
         SimpleMatrix k1v = v.plus(k1vDot.scale(dt).divide(2));
         SimpleMatrix k2vDot = drDt2Transpose.mult(acc).plus(ImuState.GRAVITY);
@@ -1044,23 +1019,16 @@ public class Msckf {
         q = quaternionNormalize(dqDt);
 
 
-        Log.d(localTag, "dt=" + dt +
-                ", v=" + v +
-                ", k1vDot=" + k1vDot +
-                ", k2vDot=" + k2vDot +
-                ", k3vDot=" + k3vDot +
-                ", k4vDot=" + k4vDot +
-                ", k4vDot.scale(dt/6)=" + k4vDot.scale(dt/6)
-        );
-
-
         // update the imu state
-        v = v.plus(k1vDot.plus(k2vDot.scale(2)).plus(k3vDot.scale(2)).plus(k4vDot).scale(dt/6));
+        v = v.plus(
+                    k1vDot
+                    .plus(k2vDot.scale(2))
+                    .plus(k3vDot.scale(2))
+                    .plus(k4vDot)
+                    .scale(dt/6));
         p = p.plus(k1pDot.plus(k2pDot.scale(2)).plus(k3pDot.scale(2)).plus(k4pDot).scale(dt/6));
 
-        //Log.d(localTag, debugCt + "/ orientation before: " + quaternionToPoint(q));
         stateServer.imuState.orientation = q;
-        //Log.d(localTag, debugCt + "/ predictNewState position before: " + p);
         stateServer.imuState.position = p;
 
 

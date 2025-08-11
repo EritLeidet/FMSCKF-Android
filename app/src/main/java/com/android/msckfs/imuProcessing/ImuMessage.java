@@ -1,17 +1,19 @@
 package com.android.msckfs.imuProcessing;
 
+import static com.android.msckfs.utils.MathUtils.NANOSECOND_TO_SECOND;
+
 import org.ejml.simple.SimpleMatrix;
 
 public class ImuMessage {
     public final SimpleMatrix angularVelocity; // vec3
     public final SimpleMatrix linearAcceleration; // vec3
 
-    public final long timestamp; // unix time
+    public final double time;
 
     public ImuMessage(long timestamp, float[] angularVelocity, float[] linearAcceleration) {
+        this.time = timestamp * NANOSECOND_TO_SECOND;
         this.angularVelocity = new SimpleMatrix(angularVelocity);
         this.linearAcceleration = new SimpleMatrix(linearAcceleration);
-        this.timestamp = timestamp;
     }
 
     @Override
@@ -19,7 +21,7 @@ public class ImuMessage {
         return "ImuMessage{" +
                 "angularVelocity=" + angularVelocity +
                 ", linearAcceleration=" + linearAcceleration +
-                ", timestamp=" + timestamp +
+                ", timestamp=" + time +
                 '}';
     }
 }

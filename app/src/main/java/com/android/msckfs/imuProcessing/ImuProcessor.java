@@ -33,9 +33,9 @@ public class ImuProcessor implements SensorEventListener {
         mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED);
         mAcc = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER_UNCALIBRATED);
 
-        // TODO: what is a reasonable sensor delay for vr?
-        mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
-        mSensorManager.registerListener(this, mAcc, SensorManager.SENSOR_DELAY_NORMAL);
+        // TODO: what is a reasonable sensor delay for vr? For MSCKF dt at most 0.1
+        mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_GAME);
+        mSensorManager.registerListener(this, mAcc, SensorManager.SENSOR_DELAY_GAME);
 
 
         Log.i(tag, "Publishing Job started");
@@ -71,10 +71,13 @@ public class ImuProcessor implements SensorEventListener {
 
         if (angVel != null && linAcc != null) {
             // TODO: reset angVel and linAcc to null? So that almost synchronized?
-            // msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc));
-            msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
+
+            msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc)); // TODO
+            //msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
 
             Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
+            angVel = null;
+            linAcc = null;
         }
 
     }

@@ -1,12 +1,14 @@
 package com.android.msckfs.msckfs;
 
+import static com.android.msckfs.utils.MathUtils.NANOSECOND_TO_SECOND;
+
 public abstract class State {
     public int id;
-    public long timestamp; // unix time
+    public double time; // unix time // TODO: convert to seconds time?
 
-    public State(int id, long timestamp) {
+    public State(int id, double time) {
         this.id = id;
-        this.timestamp = timestamp;
+        this.time = time;
     }
 
 

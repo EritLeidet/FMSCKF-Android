@@ -60,7 +60,7 @@ public class ImuState extends State {
                 ", rImuCam=" + rImuCam +
                 ", tCamImu=" + tCamImu +
                 ", id=" + id +
-                ", timestamp=" + timestamp +
+                ", time=" + time +
                 '}';
     }
 }
