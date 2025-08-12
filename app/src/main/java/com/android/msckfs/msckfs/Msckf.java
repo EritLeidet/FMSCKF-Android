@@ -821,11 +821,12 @@ public class Msckf {
 
 
         // Update the camera states.
-        for (Map.Entry<Integer,CamState> entry : stateServer.camStates.entrySet()) {
-            CamState camState = entry.getValue();
+        for (int i = 0; i < stateServer.camStates.size(); i++) {
+        //for (Map.Entry<Integer,CamState> entry : stateServer.camStates.entrySet()) {
+            CamState camState = stateServer.camStates.getValue(i);
             SimpleMatrix deltaXcam = deltaX.rows(
-                    StateInfo.IMU_STATE_SIZE + entry.getKey() * StateInfo.CAM_STATE_SIZE,
-                    (StateInfo.IMU_STATE_SIZE + StateInfo.CAM_STATE_SIZE) + (entry.getKey() * StateInfo.CAM_STATE_SIZE));
+                    StateInfo.IMU_STATE_SIZE + i * StateInfo.CAM_STATE_SIZE,
+                    StateInfo.IMU_STATE_SIZE + i * StateInfo.CAM_STATE_SIZE + StateInfo.CAM_STATE_SIZE);
             SimpleMatrix dqCam = smallAngleQuaternion(deltaXcam.rows(0,3));
             camState.orientation = quaternionMultiplication(dqCam, camState.orientation);
             camState.position = camState.position.plus(deltaXcam.rows(3,SimpleMatrix.END));
