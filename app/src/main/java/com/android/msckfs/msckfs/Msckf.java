@@ -758,7 +758,7 @@ public class Msckf {
         if (H.getNumRows() > H.getNumCols()) {
             // H_sparse
             DMatrixSparseCSC Hsparse = new DMatrixSparseCSC(H.getNumRows(), H.getNumCols());
-            Hsparse.setTo(H.getDDRM());
+            Hsparse.setTo(H.getDSCC());
 
             QR.decompose(Hsparse);
             // TODO: compare with MatLab: https://github.com/utiasSTARS/msckf-swf-comparison/blob/ad9566ef35c3e4792a89b04623e1fa2f99238435/msckf/calcTH.m#L4
