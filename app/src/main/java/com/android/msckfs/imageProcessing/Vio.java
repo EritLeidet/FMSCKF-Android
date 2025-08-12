@@ -11,10 +11,12 @@ import android.graphics.PorterDuff;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
+import android.util.Range;
 
 import androidx.annotation.OptIn;
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
@@ -24,6 +26,7 @@ import androidx.camera.core.ImageProxy;
 import androidx.camera.core.UseCase;
 import androidx.camera.core.UseCaseGroup;
 import androidx.camera.effects.OverlayEffect;
+import androidx.camera.camera2.interop.Camera2Interop;
 import androidx.core.util.Consumer;
 
 import com.android.msckfs.imuProcessing.ImuProcessor;
@@ -67,7 +70,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     // TODO: RANSAC?
 
     // TODO: do you have to use imu as well, to help feature tracking?
-    private static final String TAG = "FeatureTracker";
+    private static final String TAG = "VIO";
     private final List<PointTrack> active = new CopyOnWriteArrayList<>(); // TODO: if not used concurrently anymore, change back to a normal ArrayList for performance reasons.
     private final List<PointTrack> spawned = new ArrayList<>();
     private final List<PointTrack> inactive = new ArrayList<>();
@@ -183,9 +186,12 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         builder.setResolutionSelector(resolutionSelector);
 
         // Set target frame rate.
-        // Camera2Interop.Extender<ImageAnalysis> ext = new Camera2Interop.Extender<>(builder);
-        // ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-        // ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(30, 30));
+        // TODO: once bugs are solved, remove this part to go back to (higher) default frame rate.
+        /*
+        Camera2Interop.Extender<ImageAnalysis> ext = new Camera2Interop.Extender<>(builder);
+        ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+        ext.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(20, 20));
+         */
 
         // Build Use Case.
         ImageAnalysis imageAnalysis = builder.build();
@@ -222,14 +228,14 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         }
 
 
-        Log.d(TAG, "Before Image Callback.");
-        effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp());
-        Log.d(TAG, "After Image Callback.");
+        effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp()); // TODO: why does it work (but is slower) when removing this line?
 
         Odometry odom = msckf.featureCallback(new FeatureMessage(
                 imageProxy.getImageInfo().getTimestamp(),
                 undistortPoints(active)));
-        if (odom != null) Log.i(TAG, odom.pose.R.toString() + odom.pose.t.toString());
+        if (odom != null) {
+            Log.i(TAG, odom.pose.t.toString());
+        }
 
 
 
@@ -267,7 +273,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         }
 
 
-        public synchronized void onDraw(Canvas canvas) { // TODO: remove synchronized tag?
+        public void onDraw(Canvas canvas) {
             // Debugging: duplicate features? Nope.
 
             // Clear canvas

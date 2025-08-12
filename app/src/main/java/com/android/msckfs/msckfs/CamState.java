@@ -3,8 +3,8 @@ package com.android.msckfs.msckfs;
 import org.ejml.simple.SimpleMatrix;
 
 public class CamState extends State {
-    public CamState(int id, long timestamp) {
-        super(id, timestamp);
+    public CamState(int id, double time) {
+        super(id, time);
     }
 
     public SimpleMatrix orientation; // Quaternion

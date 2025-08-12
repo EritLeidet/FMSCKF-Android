@@ -75,7 +75,7 @@ public class ImuProcessor implements SensorEventListener {
             msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, angVel, linAcc)); // TODO
             //msckf.imuCallback(new ImuMessage(sensorEvent.timestamp, new float[]{0,0,0}, new float[]{0,0,-9.81f}));
 
-            Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
+            //Log.i(tag, String.format("angVel: %s, linAcc: %s", Arrays.toString(angVel), Arrays.toString(linAcc)));
             angVel = null;
             linAcc = null;
         }

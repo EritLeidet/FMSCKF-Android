@@ -885,6 +885,7 @@ public class Msckf {
      */
     @SuppressWarnings("UnnecessaryLocalVariable")
     private void measurementJacobian(Integer camStateId, Feature feature, SimpleMatrix Hx, SimpleMatrix Hf, SimpleMatrix r) {
+        Log.i("measurementJacobian", "METHOD CALL!");
         CamState camState = stateServer.camStates.get(camStateId);
         assert(camState != null);
 
@@ -923,11 +924,16 @@ public class Msckf {
         u.insertIntoThis(0,0, quaternionToRotation(camState.orientationNull).mult(ImuState.GRAVITY));
         u.insertIntoThis(3,0, skewSymmetric(pw.minus(camState.positionNull)).mult(ImuState.GRAVITY));
 
-        Hx.setTo(A.minus(
-                    A.mult(u).mult(
-                        u.transpose().mult(u))
-                    .invert().mult(
-                            u.transpose())));
+        Log.d("measurementJacobian", "A=" + A + ", u=" + u + "Hx=" + Hx);
+        Hx.setTo(A
+                .minus(
+                        A.mult(u)
+                                .mult(u
+                                        .transpose()
+                                        .mult(u)
+                                        .invert())
+                                .mult(u
+                                        .transpose())));
         Hf.setTo(Hx
                 .extractMatrix(0,SimpleMatrix.END,3,SimpleMatrix.END)
                 .negative());
