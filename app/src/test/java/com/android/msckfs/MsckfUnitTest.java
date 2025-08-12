@@ -11,6 +11,7 @@ import org.junit.Test;
  */
 public class MsckfUnitTest {
 
+
     @Test
     public void testMsckfImuIntegration() {
         Msckf msckf = new Msckf();

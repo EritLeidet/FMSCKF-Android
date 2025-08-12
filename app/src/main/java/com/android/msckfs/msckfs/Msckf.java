@@ -1,10 +1,9 @@
 package com.android.msckfs.msckfs;
 import static com.android.msckfs.utils.MathUtils.deleteColumns;
-import static com.android.msckfs.utils.MathUtils.deletedRows;
+import static com.android.msckfs.utils.MathUtils.deleteRows;
 import static com.android.msckfs.utils.MathUtils.fromTwoVectors;
 import static com.android.msckfs.utils.MathUtils.quaternionMultiplication;
 import static com.android.msckfs.utils.MathUtils.quaternionNormalize;
-import static com.android.msckfs.utils.MathUtils.quaternionToPoint;
 import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
 import static com.android.msckfs.utils.MathUtils.rotationToQuaternion;
 import static com.android.msckfs.utils.MathUtils.skewSymmetric;
@@ -17,7 +16,6 @@ import static org.ejml.dense.row.CommonOps_DDRM.mult;
 import static org.ejml.dense.row.CommonOps_DDRM.scale;
 import static org.ejml.dense.row.CommonOps_DDRM.setIdentity;
 import static org.ejml.dense.row.CommonOps_DDRM.transpose;
-import static org.ejml.dense.row.NormOps_DDRM.normF;
 
 import static java.lang.Math.cos;
 import static java.lang.Math.pow;
@@ -542,8 +540,10 @@ public class Msckf {
 
             // Remove the corresponding rows and columns in the state
             // covariance matrix.
-            SimpleMatrix newCov = deleteColumns(    deletedRows(stateServer.stateCov,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
+            Log.i("removeOldCamStates", String.format("stateCov size: (%d, %d)", stateServer.stateCov.getNumRows(), stateServer.stateCov.getNumCols()));
+            SimpleMatrix newCov = deleteColumns(    deleteRows(stateServer.stateCov,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
             assert(newCov.getNumRows() == newCov.getNumCols());
+            assert(newCov.getNumRows() <= 141);
             stateServer.stateCov = newCov;
 
             // Remove this camera state in the state vector.

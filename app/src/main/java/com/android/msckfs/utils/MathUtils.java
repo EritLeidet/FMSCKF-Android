@@ -39,10 +39,10 @@ public class MathUtils {
      * @param end - exclusive
      * @return SimpleMatrix without the selected rows.
      */
-    public static SimpleMatrix deletedRows(SimpleMatrix m, int start, int end) {
+    public static SimpleMatrix deleteRows(SimpleMatrix m, int start, int end) {
         SimpleMatrix upperRows = m.rows(0, start);
         SimpleMatrix lowerRows = m.rows(end, SimpleMatrix.END);
-        return m.concatRows(upperRows, lowerRows);
+        return upperRows.concatRows(lowerRows);
 
     }
 
@@ -55,7 +55,7 @@ public class MathUtils {
     public static SimpleMatrix deleteColumns(SimpleMatrix m, int start, int end) {
         SimpleMatrix leftCols = m.cols(0, start);
         SimpleMatrix rightCols = m.cols(end, SimpleMatrix.END);
-        return m.concatColumns(leftCols, rightCols);
+        return leftCols.concatColumns(rightCols);
 
     }
     
