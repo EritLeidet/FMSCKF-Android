@@ -382,9 +382,7 @@ public class Msckf {
 
         // Propogate the IMU state.
         // that are received before the image msg.
-        Log.e("predictNewState", "pos before:" + stateServer.imuState.position);
         batchImuProcessing(featureMsg.time);
-        Log.e("predictNewState", "pos after:" + stateServer.imuState.position);
 
         //assert(featureCallbackDebugCt != 2);
         featureCallbackDebugCt++;
@@ -520,7 +518,6 @@ public class Msckf {
             if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
                 Hx.insertIntoThis(stackCount, 0, Hxj);
                 r.insertIntoThis(stackCount, 0, rj);
-                Log.i("removeOldCamStates", "Hx=" + Hx + ", Hxj=" + Hxj);
                 stackCount += Hxj.getNumRows();
             }
 
@@ -544,7 +541,6 @@ public class Msckf {
 
             // Remove the corresponding rows and columns in the state
             // covariance matrix.
-            Log.i("removeOldCamStates", String.format("stateCov size: (%d, %d)", stateServer.stateCov.getNumRows(), stateServer.stateCov.getNumCols()));
             SimpleMatrix newCov = deleteColumns(    deleteRows(stateServer.stateCov,camStateStart,camStateEnd)   ,camStateStart,camStateEnd);
             assert(newCov.getNumRows() == newCov.getNumCols());
             assert(newCov.getNumRows() <= 141);
@@ -890,7 +886,6 @@ public class Msckf {
      */
     @SuppressWarnings("UnnecessaryLocalVariable")
     private void measurementJacobian(Integer camStateId, Feature feature, SimpleMatrix Hx, SimpleMatrix Hf, SimpleMatrix r) {
-        Log.i("measurementJacobian", "METHOD CALL!");
         CamState camState = stateServer.camStates.get(camStateId);
         assert(camState != null);
 
@@ -929,7 +924,6 @@ public class Msckf {
         u.insertIntoThis(0,0, quaternionToRotation(camState.orientationNull).mult(ImuState.GRAVITY));
         u.insertIntoThis(3,0, skewSymmetric(pw.minus(camState.positionNull)).mult(ImuState.GRAVITY));
 
-        Log.d("measurementJacobian", "A=" + A + ", u=" + u + "Hx=" + Hx);
         Hx.setTo(A
                 .minus(
                         A.mult(u)

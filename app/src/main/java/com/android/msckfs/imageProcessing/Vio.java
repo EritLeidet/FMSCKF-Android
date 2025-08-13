@@ -11,12 +11,10 @@ import android.graphics.PorterDuff;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
-import android.util.Range;
 
 import androidx.annotation.OptIn;
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
@@ -26,14 +24,15 @@ import androidx.camera.core.ImageProxy;
 import androidx.camera.core.UseCase;
 import androidx.camera.core.UseCaseGroup;
 import androidx.camera.effects.OverlayEffect;
-import androidx.camera.camera2.interop.Camera2Interop;
 import androidx.core.util.Consumer;
 
 import com.android.msckfs.imuProcessing.ImuProcessor;
 import com.android.msckfs.msckfs.Msckf;
 import com.android.msckfs.msckfs.Odometry;
+import com.android.msckfs.utils.Isometry3D;
 
 import org.ddogleg.struct.DogArray_I8;
+import org.ejml.simple.SimpleMatrix;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
@@ -204,6 +203,12 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
     private final DogArray_I8 analyzeBuffer = new DogArray_I8();
 
+    private final Odometry odom = new Odometry(
+            -1,
+            new Isometry3D(SimpleMatrix.identity(3), new SimpleMatrix(3,1)),
+            new SimpleMatrix(3,1),
+            new Isometry3D(SimpleMatrix.identity(3), new SimpleMatrix(3,1)));
+
     @Override
     public void analyze(@NonNull ImageProxy imageProxy) {
 
@@ -230,12 +235,17 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
         effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp()); // TODO: why does it work (but is slower) when removing this line?
 
-        Odometry odom = msckf.featureCallback(new FeatureMessage(
+
+        Odometry latestOdom = msckf.featureCallback(new FeatureMessage(
                 imageProxy.getImageInfo().getTimestamp(),
                 undistortPoints(active)));
-        if (odom != null) {
-            Log.i(TAG, odom.pose.t.toString());
+        if (latestOdom != null) {
+            synchronized (this.odom) {
+                this.odom.setTo(latestOdom);
+            }
+            Log.i(TAG, latestOdom.pose.t.toString());
         }
+
 
 
 
@@ -267,24 +277,23 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
                 Paint paint = new Paint();
                 paint.setColor(color);
                 paint.setStyle(Paint.Style.FILL);
+                paint.setStrokeWidth(10);
                 paints.add(paint);
             }
 
         }
 
 
+        private final SimpleMatrix translation = new SimpleMatrix(new double[]{300,300,300});
+
+        private static final double axisLength = 150;
+        private final SimpleMatrix xAxis = new SimpleMatrix(new double[]{axisLength,0,0});
+        private final SimpleMatrix yAxis = new SimpleMatrix(new double[]{0,axisLength,0});
+        private final SimpleMatrix zAxis = new SimpleMatrix(new double[]{0,0,axisLength});
         public void onDraw(Canvas canvas) {
-            // Debugging: duplicate features? Nope.
 
             // Clear canvas
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
-            /*
-            if (firstDraw) {
-                canvas.drawCircle(200, 200, 20, paints.get(0));
-                firstDraw = false;
-            }
-
-             */
 
             canvas.drawCircle(canvas.getWidth(), canvas.getHeight(), 5, paints.get(0));
 
@@ -292,6 +301,40 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             for (PointTrack track : active) {
                 canvas.drawCircle((float) track.pixel.x, (float) track.pixel.y, 5, paints.get((int) (track.featureId % paints.size()))); // TODO: the coordinates are nonsense. Look at the BoofCV demo code.
             }
+
+            // Draw Orientation
+            SimpleMatrix endXpoint, endYpoint, endZpoint;
+            synchronized (odom) {
+                endXpoint = (odom.pose.R).mult(xAxis).plus(translation);
+                endYpoint = (odom.pose.R).mult(yAxis).plus(translation);
+                endZpoint = (odom.pose.R).mult(zAxis).plus(translation);
+            }
+
+
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    (float) endXpoint.get(0), (float) endXpoint.get(1),
+                    paints.get(0)
+
+            );
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    (float) endYpoint.get(0), (float) endYpoint.get(1),
+                    paints.get(1)
+
+            );
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    (float) endZpoint.get(0), (float) endZpoint.get(1),
+                    paints.get(2)
+
+            );
+
+
+
+
+
+
 
 
         }

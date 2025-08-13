@@ -8,13 +8,20 @@ import org.ejml.simple.SimpleMatrix;
 
 public class Odometry {
 
-    public final double timestamp;
+    public double timestamp;
 
-    public final Isometry3D pose; // Body pose. Usually equal to IMU pose.
+    public Isometry3D pose; // Body pose. Usually equal to IMU pose.
 
-    public final SimpleMatrix bodyVelocity;
+    public SimpleMatrix bodyVelocity;
 
-    public final Isometry3D camPose;
+    public Isometry3D camPose;
+
+    public void setTo(Odometry odom) {
+        this.timestamp = odom.timestamp;
+        this.pose = odom.pose;
+        this.bodyVelocity = odom.bodyVelocity;
+        this.camPose = odom.camPose;
+    }
 
     public Odometry(double timestamp, Isometry3D pose, SimpleMatrix bodyVelocity, Isometry3D camPose) {
         this.timestamp = timestamp;
