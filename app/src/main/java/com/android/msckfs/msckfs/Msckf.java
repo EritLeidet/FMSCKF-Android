@@ -30,6 +30,7 @@ import com.android.msckfs.imageProcessing.FeatureMeasurement;
 import com.android.msckfs.utils.Isometry3D;
 
 import org.apache.commons.statistics.distribution.ChiSquaredDistribution;
+import org.ejml.MatrixDimensionException;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.data.DMatrixSparseCSC;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
@@ -497,8 +498,8 @@ public class Msckf {
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
         int stackCount = 0;
-        SimpleMatrix Hxj = new SimpleMatrix(3,getStateSize());
-        SimpleMatrix rj = new SimpleMatrix(3,1);
+        SimpleMatrix Hxj = new SimpleMatrix(0,0);
+        SimpleMatrix rj = new SimpleMatrix(0,0);
 
 
         for (Feature feature : stateServer.mapServer.values()) {
@@ -519,6 +520,7 @@ public class Msckf {
             if (gatingTest(Hxj, rj, involvedCamStateIds.size())) {
                 Hx.insertIntoThis(stackCount, 0, Hxj);
                 r.insertIntoThis(stackCount, 0, rj);
+                Log.i("removeOldCamStates", "Hx=" + Hx + ", Hxj=" + Hxj);
                 stackCount += Hxj.getNumRows();
             }
 
@@ -529,6 +531,8 @@ public class Msckf {
 
         Hx = Hx.rows(0, stackCount);
         r = r.rows(0,stackCount);
+
+
 
         // Perform measurment update.
         measurementUpdate(Hx, r);
@@ -601,8 +605,8 @@ public class Msckf {
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
         int stackCount = 0;
-        SimpleMatrix Hxj = new SimpleMatrix(3,getStateSize());
-        SimpleMatrix rj = new SimpleMatrix(3,1);
+        SimpleMatrix Hxj = new SimpleMatrix(0,0);
+        SimpleMatrix rj = new SimpleMatrix(0,0);
 
         // Process the features which lose track.
         for (Feature feature : processedFeatures) {
@@ -873,7 +877,7 @@ public class Msckf {
         // Project the residual and Jacobians onto the nullspace of H_fj.
         // svd of H_fj
         SimpleMatrix U = Hfj.svd().getU(); // Shape (m x m), m = Hfj.numRows = jacobianRowSize
-        SimpleMatrix A = U.cols(jacobianRowSize - 3, SimpleMatrix.END); // Shape (m, 3)
+        SimpleMatrix A = U.cols(3, SimpleMatrix.END); // Shape (m, jacobianRowSize-3)
 
         Hx.setTo(A.transpose().mult(Hxj));
         r.setTo(A.transpose().mult(rj));
