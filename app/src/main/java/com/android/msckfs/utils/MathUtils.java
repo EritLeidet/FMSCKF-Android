@@ -19,7 +19,6 @@ import java.util.List;
  * <a href="https://github.com/KumarRobotics/msckf_vio/blob/master/include/msckf_vio/math_utils.hpp">...</a>
  */
 // JPL Convention used by my vector representation of quaternions: [x, y, z, w(scalar)]^T
-// Convention used by Apache Commons Quaternion class: [w(scalar),x,y,z]
 public class MathUtils {
 
     public static final String TAG = "MathUtils";

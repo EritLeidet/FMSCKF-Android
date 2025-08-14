@@ -389,18 +389,18 @@ public class Msckf {
 
 
         // Augment the state vector.
-        stateAugmentation(featureMsg.time);
+        // TODO: uncomment stateAugmentation(featureMsg.time);
 
         // Add new observations for existing features or new features
         // in the map server.
-        addFeatureObservations(featureMsg);
+        // TODO: uncomment addFeatureObservations(featureMsg);
 
         // Perform measurement update if necessary.
         // And prune features
-        removeLostFeatures();
+        // TODO: uncomment removeLostFeatures();
 
         // Prune camera states.
-        removeOldCamStates();
+        // TODO: uncomment removeOldCamStates();
 
         // Publish the odometry.
         return publish(featureMsg.time);
@@ -413,8 +413,11 @@ public class Msckf {
         ImuState imuState = stateServer.imuState;
 
         Isometry3D Tiw = new Isometry3D(
-                quaternionToRotation(imuState.orientation).transpose(),
+                quaternionToRotation(imuState.orientation).transpose(), // TODO: .transpose() rotation matrix.
                 imuState.position);
+
+        Log.d(TAG, "ImuState orientation: " + imuState.orientation);
+
         Isometry3D Tbw = ImuState.tImuBody.mult(Tiw).mult(ImuState.tImuBody.inverse());
         SimpleMatrix bodyVelocity = ImuState.tImuBody.R.mult(imuState.velocity);
 

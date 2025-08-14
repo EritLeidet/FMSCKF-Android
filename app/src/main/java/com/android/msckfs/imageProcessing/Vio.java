@@ -8,6 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -32,6 +33,7 @@ import com.android.msckfs.msckfs.Odometry;
 import com.android.msckfs.utils.Isometry3D;
 
 import org.ddogleg.struct.DogArray_I8;
+import org.ejml.data.FMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 import org.jspecify.annotations.NonNull;
 
@@ -243,7 +245,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             synchronized (this.odom) {
                 this.odom.setTo(latestOdom);
             }
-            Log.i(TAG, latestOdom.pose.t.toString());
+            Log.i(TAG, latestOdom.pose.toString());
         }
 
 
@@ -270,17 +272,32 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
               Color.CYAN,
               Color.GREEN,
               Color.MAGENTA,
-              Color.YELLOW
+              Color.YELLOW,
+              Color.WHITE
             };
 
             for (int color : colors) {
                 Paint paint = new Paint();
                 paint.setColor(color);
-                paint.setStyle(Paint.Style.FILL);
-                paint.setStrokeWidth(10);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(8);
                 paints.add(paint);
             }
 
+            this.positionDiagramPaint = new Paint();
+            this.positionDiagramPaint.setColor(Color.WHITE);
+            this.positionDiagramPaint.setStyle(Paint.Style.STROKE);
+            this.positionDiagramPaint.setStrokeWidth(2);
+
+
+            this.axisPaints = new Paint[]{new Paint(),new Paint(),new Paint()};
+            for (Paint axisPaint : axisPaints) {
+                axisPaint.setStyle(Paint.Style.STROKE);
+                axisPaint.setStrokeWidth(1);
+            }
+            axisPaints[0].setColor(Color.RED);
+            axisPaints[1].setColor(Color.GREEN);
+            axisPaints[2].setColor(Color.BLUE);
         }
 
 
@@ -288,47 +305,82 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
         private static final double axisLength = 150;
         private final SimpleMatrix xAxis = new SimpleMatrix(new double[]{axisLength,0,0});
-        private final SimpleMatrix yAxis = new SimpleMatrix(new double[]{0,axisLength,0});
-        private final SimpleMatrix zAxis = new SimpleMatrix(new double[]{0,0,axisLength});
-        public void onDraw(Canvas canvas) {
-
-            // Clear canvas
-            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
-
-            canvas.drawCircle(canvas.getWidth(), canvas.getHeight(), 5, paints.get(0));
+        private final SimpleMatrix yAxis = new SimpleMatrix(new double[]{0,-axisLength,0});
+        private final SimpleMatrix zAxis = new SimpleMatrix(new double[]{0,0,-axisLength});
 
 
+
+        private final Paint[] axisPaints;
+
+        private final Paint positionDiagramPaint;
+
+        private void drawPosition(Canvas canvas) {
+            // Draw outline.
+            final float diagramX = 400, diagramY = 200, diagramSize = 100; // TODO: correct scale bc. currently playerPosition is in meters, but Size is in pixels.
+            canvas.drawRect(diagramX, diagramY,diagramX+diagramSize,diagramY+diagramSize, positionDiagramPaint);
+
+            // Draw player position.
+            final float playerX, playerY, playerZ;
+            synchronized (odom) {
+                playerX = (float) odom.pose.t.get(0);
+                playerY = (float) odom.pose.t.get(1);
+                playerZ = (float) odom.pose.t.get(2);
+            }
+            canvas.drawCircle(diagramX + (diagramSize/2) + playerX, diagramY + (diagramSize/2) + playerZ, 5, paints.get(1));
+
+
+        }
+        private void drawOrientation(Canvas canvas) {
+            // Draw coordinate system on preview.
+
+            FMatrixRMaj endXpoint, endYpoint, endZpoint;
+            synchronized (odom) {
+                endXpoint = (odom.pose.R).mult(xAxis).plus(translation).getFDRM();
+                endYpoint = (odom.pose.R).mult(yAxis).plus(translation).getFDRM();
+                endZpoint = (odom.pose.R).mult(zAxis).plus(translation).getFDRM();
+            }
+
+
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    endXpoint.get(0), endXpoint.get(1),
+                    axisPaints[0]
+
+            );
+            canvas.drawText("x", endXpoint.get(0), endXpoint.get(1), axisPaints[0]);
+
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    endYpoint.get(0), endYpoint.get(1),
+                    axisPaints[1]
+
+            );
+            canvas.drawText("y", endYpoint.get(0), endYpoint.get(1), axisPaints[1]);
+
+            canvas.drawLine(
+                    (float) translation.get(0), (float) translation.get(1),
+                    endZpoint.get(0),endZpoint.get(1),
+                    axisPaints[2]
+
+            );
+            canvas.drawText("z", endZpoint.get(0), endZpoint.get(1), axisPaints[2]);
+        }
+
+        private void drawFeatures(Canvas canvas) {
             for (PointTrack track : active) {
                 canvas.drawCircle((float) track.pixel.x, (float) track.pixel.y, 5, paints.get((int) (track.featureId % paints.size()))); // TODO: the coordinates are nonsense. Look at the BoofCV demo code.
             }
 
-            // Draw Orientation
-            SimpleMatrix endXpoint, endYpoint, endZpoint;
-            synchronized (odom) {
-                endXpoint = (odom.pose.R).mult(xAxis).plus(translation);
-                endYpoint = (odom.pose.R).mult(yAxis).plus(translation);
-                endZpoint = (odom.pose.R).mult(zAxis).plus(translation);
-            }
+        }
+        public void onDraw(Canvas canvas) {
+            // Clear canvas
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
+
+            //drawFeatures(canvas);
+            drawOrientation(canvas);
+            //drawPosition(canvas);
 
 
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    (float) endXpoint.get(0), (float) endXpoint.get(1),
-                    paints.get(0)
-
-            );
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    (float) endYpoint.get(0), (float) endYpoint.get(1),
-                    paints.get(1)
-
-            );
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    (float) endZpoint.get(0), (float) endZpoint.get(1),
-                    paints.get(2)
-
-            );
 
 
 
