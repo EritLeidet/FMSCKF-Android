@@ -28,6 +28,7 @@ import androidx.camera.effects.OverlayEffect;
 import androidx.core.util.Consumer;
 
 import com.android.msckfs.imuProcessing.ImuProcessor;
+import com.android.msckfs.msckfs.Fmsckf;
 import com.android.msckfs.msckfs.Msckf;
 import com.android.msckfs.msckfs.Odometry;
 import com.android.msckfs.utils.Isometry3D;
@@ -88,7 +89,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     private static final int maxFeatures = 200; // 350
 
 
-    private final Msckf msckf = new Msckf();
+    private final Msckf msckf = new Fmsckf();
 
     private ImuProcessor imuProcessor;
 
@@ -301,12 +302,12 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         }
 
 
-        private final SimpleMatrix translation = new SimpleMatrix(new double[]{300,300,300});
+        private final SimpleMatrix translation = new SimpleMatrix(new float[]{300,300,300});
 
-        private static final double axisLength = 150;
-        private final SimpleMatrix xAxis = new SimpleMatrix(new double[]{axisLength,0,0});
-        private final SimpleMatrix yAxis = new SimpleMatrix(new double[]{0,-axisLength,0});
-        private final SimpleMatrix zAxis = new SimpleMatrix(new double[]{0,0,-axisLength});
+        private static final float axisLength = 150;
+        private final SimpleMatrix xAxis = new SimpleMatrix(new float[]{axisLength,0,0});
+        private final SimpleMatrix yAxis = new SimpleMatrix(new float[]{0,-axisLength,0});
+        private final SimpleMatrix zAxis = new SimpleMatrix(new float[]{0,0,axisLength});
 
 
 
@@ -315,11 +316,12 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         private final Paint positionDiagramPaint;
 
         private void drawPosition(Canvas canvas) {
+
             // Draw outline.
             final float diagramX = 400, diagramY = 200, diagramSize = 100; // TODO: correct scale bc. currently playerPosition is in meters, but Size is in pixels.
             canvas.drawRect(diagramX, diagramY,diagramX+diagramSize,diagramY+diagramSize, positionDiagramPaint);
 
-            // Draw player position.
+            // Draw player X-Z position.
             final float playerX, playerY, playerZ;
             synchronized (odom) {
                 playerX = (float) odom.pose.t.get(0);
@@ -329,9 +331,19 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             canvas.drawCircle(diagramX + (diagramSize/2) + playerX, diagramY + (diagramSize/2) + playerZ, 5, paints.get(1));
 
 
+            // Draw player height
+            final float heightDiagramX = diagramX+diagramSize+diagramSize/2;
+            canvas.drawLine(heightDiagramX, diagramY, heightDiagramX, diagramY + diagramSize, positionDiagramPaint);
+            canvas.drawCircle(heightDiagramX, diagramY + (diagramSize/2) + playerY, 5, paints.get(1));
+
+
+
+
+
         }
         private void drawOrientation(Canvas canvas) {
             // Draw coordinate system on preview.
+
 
             FMatrixRMaj endXpoint, endYpoint, endZpoint;
             synchronized (odom) {
@@ -340,30 +352,23 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
                 endZpoint = (odom.pose.R).mult(zAxis).plus(translation).getFDRM();
             }
 
+            // Draw axes.
+            canvas.rotate(-90F, (float) translation.get(0), (float) translation.get(1));
 
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    endXpoint.get(0), endXpoint.get(1),
-                    axisPaints[0]
+            canvas.drawLine((float) translation.get(0), (float) translation.get(1), endXpoint.get(0), endXpoint.get(1), axisPaints[0]);
+            canvas.drawLine((float) translation.get(0), (float) translation.get(1), endYpoint.get(0), endYpoint.get(1), axisPaints[1]);
+            canvas.drawLine((float) translation.get(0), (float) translation.get(1), endZpoint.get(0),endZpoint.get(1), axisPaints[2]);
 
-            );
+
+
+            // Label axes
             canvas.drawText("x", endXpoint.get(0), endXpoint.get(1), axisPaints[0]);
-
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    endYpoint.get(0), endYpoint.get(1),
-                    axisPaints[1]
-
-            );
             canvas.drawText("y", endYpoint.get(0), endYpoint.get(1), axisPaints[1]);
-
-            canvas.drawLine(
-                    (float) translation.get(0), (float) translation.get(1),
-                    endZpoint.get(0),endZpoint.get(1),
-                    axisPaints[2]
-
-            );
             canvas.drawText("z", endZpoint.get(0), endZpoint.get(1), axisPaints[2]);
+
+            canvas.rotate(90F, (float) translation.get(0), (float) translation.get(1));
+
+
         }
 
         private void drawFeatures(Canvas canvas) {
@@ -378,7 +383,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
             //drawFeatures(canvas);
             drawOrientation(canvas);
-            //drawPosition(canvas);
+            drawPosition(canvas);
 
 
 

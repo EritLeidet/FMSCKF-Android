@@ -63,7 +63,7 @@ public class Msckf {
      */
     private final List<ImuMessage> imuBuffer = Collections.synchronizedList(new LinkedList<>());
 
-    private final StateServer stateServer;
+    protected final StateServer stateServer;
 
 
     private boolean isGravitySet = false;
@@ -78,7 +78,7 @@ public class Msckf {
     private final DMatrixRMaj Fdt = new DMatrixRMaj(), FdtSquare = new DMatrixRMaj(), FdtCube = new DMatrixRMaj();
 
     private final Map<Integer,Double> chiSquaredTestTable = new HashMap<>();
-    
+
     public Msckf() {
         assert(!denseSolver.modifiesB());
 
@@ -232,7 +232,7 @@ public class Msckf {
 
     }
 
-    private int getStateSize() {
+    protected int getStateSize() {
         return StateInfo.IMU_STATE_SIZE + stateServer.camStates.size() * StateInfo.CAM_STATE_SIZE;
     }
 
@@ -379,32 +379,55 @@ public class Msckf {
             stateServer.imuState.time = featureMsg.time;
         }
 
+        long time;
+
 
         // Propogate the IMU state.
         // that are received before the image msg.
+        time = System.nanoTime();
         batchImuProcessing(featureMsg.time);
-
-        //assert(featureCallbackDebugCt != 2);
-        featureCallbackDebugCt++;
-
+        Log.i(TAG, "---batchImuProcessing:      " + (System.nanoTime() - time));
 
         // Augment the state vector.
-        // TODO: uncomment stateAugmentation(featureMsg.time);
+        time = System.nanoTime();
+        stateAugmentation(featureMsg.time);
+        Log.i(TAG, "---stateAugmentation:       " + (System.nanoTime() - time));
 
         // Add new observations for existing features or new features
         // in the map server.
-        // TODO: uncomment addFeatureObservations(featureMsg);
+        time = System.nanoTime();
+        addFeatureObservations(featureMsg);
+        Log.i(TAG, "---addFeatureObservations:  " + (System.nanoTime() - time));
+
+
+        // Prune camera states.
+        time = System.nanoTime();
+        removeOldCamStates();
+        Log.i(TAG, "---removeOldCamStates:      " + (System.nanoTime() - time));
+
+
+        boolean fmsckf = fmsckfUpdate();
 
         // Perform measurement update if necessary.
         // And prune features
-        // TODO: uncomment removeLostFeatures();
+        if (!fmsckf) {
+            time = System.nanoTime();
+            removeLostFeatures();
+            Log.i(TAG, "---removeLostFeatures:      " + (System.nanoTime() - time));
 
-        // Prune camera states.
-        // TODO: uncomment removeOldCamStates();
+        }
 
         // Publish the odometry.
         return publish(featureMsg.time);
 
+    }
+
+    /**
+     * Fast MSCKF part of the update step.
+     * @return whether a Fast MSCKF update was performed.
+     */
+    public boolean fmsckfUpdate() {
+        return false;
     }
 
 
@@ -413,10 +436,9 @@ public class Msckf {
         ImuState imuState = stateServer.imuState;
 
         Isometry3D Tiw = new Isometry3D(
-                quaternionToRotation(imuState.orientation).transpose(), // TODO: .transpose() rotation matrix.
+                quaternionToRotation(imuState.orientation), // TODO: .transpose() rotation matrix.
                 imuState.position);
 
-        Log.d(TAG, "ImuState orientation: " + imuState.orientation);
 
         Isometry3D Tbw = ImuState.tImuBody.mult(Tiw).mult(ImuState.tImuBody.inverse());
         SimpleMatrix bodyVelocity = ImuState.tImuBody.R.mult(imuState.velocity);
@@ -537,7 +559,11 @@ public class Msckf {
         // Perform measurment update.
         measurementUpdate(Hx, r);
 
-        for (Integer camId : rmCamStateIds) {
+        pruneCamStates(rmCamStateIds);
+    }
+
+    protected void pruneCamStates(List<Integer> camStateIds) {
+        for (Integer camId : camStateIds) {
             int idx = stateServer.camStates.indexOf(camId);
             int camStateStart = StateInfo.IMU_STATE_SIZE + StateInfo.CAM_STATE_SIZE*idx;
             int camStateEnd = camStateStart + 6;
@@ -601,6 +627,7 @@ public class Msckf {
         // Return if there is no lost feature to be processed.
         if (processedFeatures.isEmpty()) return;
 
+
         SimpleMatrix Hx = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix r = new SimpleMatrix(jacobianRowSize,1);
         int stackCount = 0;
@@ -640,7 +667,7 @@ public class Msckf {
     private final DMatrixRMaj A = new DMatrixRMaj(), X = new DMatrixRMaj();
 
     @SuppressWarnings("ConstantConditions") // suppress unwanted null pointer warnings
-    private boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) {
+    protected boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) {
         DMatrixRMaj P1 = H.mult(stateServer.stateCov).mult(H.transpose()).getDDRM();
         DMatrixRMaj P2 = SimpleMatrix.identity(H.getNumRows()).scale(Config.OBSERVATION_NOISE).getDDRM();
         add(P1,P2,A);
@@ -851,7 +878,7 @@ public class Msckf {
      * Compute the jacobian and the residual of a 3D point.
      * Modifies Hx, r.
      */
-    private void featureJacobian(Feature feature, List<Integer> camStateIds, SimpleMatrix Hx, SimpleMatrix r) {
+    protected void featureJacobian(Feature feature, List<Integer> camStateIds, SimpleMatrix Hx, SimpleMatrix r) {
         int jacobianRowSize = 2 * camStateIds.size();
         SimpleMatrix Hxj = new SimpleMatrix(jacobianRowSize, getStateSize());
         SimpleMatrix Hfj = new SimpleMatrix(jacobianRowSize, 3);
