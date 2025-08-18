@@ -10,7 +10,7 @@ public class Fmsckf extends Msckf {
 
     @Override
     public boolean fmsckfUpdate() {
-        if (stateServer.camStates.size() >= Config.MIN_CAM_STATES) return false;
+        if (stateServer.mapServer.size() >= Config.MIN_TRACKED_FEATURES) return false;
 
         // TODO: do anything with these?
         List<Long> invalidFeatureIds = new LinkedList<>();
@@ -90,7 +90,7 @@ public class Fmsckf extends Msckf {
     }
     private static class Config {
 
-        static final int MIN_CAM_STATES = 8; // 8 is min. if you use RANSAC. See: FMSCKF Paper.
+        static final int MIN_TRACKED_FEATURES = 8; // 8 is min. if you use RANSAC. See: FMSCKF Paper.
 
     }
 }
