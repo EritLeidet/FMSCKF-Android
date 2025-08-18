@@ -89,7 +89,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     private static final int maxFeatures = 50; // 350
 
 
-    private final Msckf msckf = new Msckf();
+    private final Msckf msckf = new Fmsckf();
 
     private ImuProcessor imuProcessor;
 

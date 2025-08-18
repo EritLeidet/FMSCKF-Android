@@ -85,6 +85,8 @@ public class Fmsckf extends Msckf {
             pruneCamStates(stateServer.camStates.asList().subList(0,stateServer.camStates.size()-1));
 
         }
+
+        // TODO: delete processed features or nah?
         return true;
 
     }
