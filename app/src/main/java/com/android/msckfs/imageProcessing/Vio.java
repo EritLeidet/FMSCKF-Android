@@ -85,11 +85,11 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     private OverlayEffect effect;
 
 
-    private static final int respawnThreshold = 50; // if number of tracks drops below this value it will attempt to spawn more
-    private static final int maxFeatures = 200; // 350
+    private static final int respawnThreshold = 8; // based on f_Min Parameter in FMSCKF
+    private static final int maxFeatures = 50; // 350
 
 
-    private final Msckf msckf = new Fmsckf();
+    private final Msckf msckf = new Msckf();
 
     private ImuProcessor imuProcessor;
 
@@ -229,11 +229,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         tracker.getActiveTracks(active);
 
         //spawned.clear();
-        if (active.size() < respawnThreshold ) {
-            tracker.spawnTracks();
-            //tracker.getNewTracks(spawned);
 
-        }
 
 
         effect.drawFrameAsync(imageProxy.getImageInfo().getTimestamp()); // TODO: why does it work (but is slower) when removing this line?
@@ -249,7 +245,11 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             Log.i(TAG, latestOdom.pose.toString());
         }
 
+        if (active.size() < respawnThreshold ) {
+            tracker.spawnTracks();
+            //tracker.getNewTracks(spawned);
 
+        }
 
 
         imageProxy.close();
@@ -381,9 +381,9 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             // Clear canvas
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
 
-            //drawFeatures(canvas);
-            drawOrientation(canvas);
-            drawPosition(canvas);
+            drawFeatures(canvas);
+            //drawOrientation(canvas);
+            //drawPosition(canvas);
 
 
 
