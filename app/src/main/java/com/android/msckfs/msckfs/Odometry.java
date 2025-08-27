@@ -39,4 +39,22 @@ public class Odometry {
                 ", camPose=" + camPose +
                 '}';
     }
+
+    public static String[] getHeadline() {
+        return new String[]{
+                "t[s:double]",
+                "p.x[m:double]",
+                "p.y[m:double]",
+                "p.z[m:double]"
+        };
+    }
+    public String[] toStringArray() {
+        return new String[]{
+                String.valueOf(timestamp),
+                String.valueOf(pose.t.get(0)),
+                String.valueOf(pose.t.get(1)),
+                String.valueOf(pose.t.get(2))
+
+        };
+    }
 }

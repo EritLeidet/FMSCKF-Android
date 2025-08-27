@@ -388,6 +388,7 @@ public class Msckf {
         batchImuProcessing(featureMsg.time);
         Log.i(TAG, "---batchImuProcessing:      " + (System.nanoTime() - time));
 
+        /*
         // Augment the state vector.
         time = System.nanoTime();
         stateAugmentation(featureMsg.time);
@@ -416,6 +417,8 @@ public class Msckf {
             Log.i(TAG, "---removeLostFeatures:      " + (System.nanoTime() - time));
 
         }
+        
+         */
 
         // Publish the odometry.
         return publish(featureMsg.time);

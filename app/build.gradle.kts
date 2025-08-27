@@ -56,7 +56,8 @@ dependencies {
     implementation(libs.boofcv.core)
     // https://mvnrepository.com/artifact/org.boofcv/boofcv-android
     implementation(libs.boofcv.boofcv.android)
-
+    // https://mvnrepository.com/artifact/org.boofcv/boofcv-swing
+    implementation(libs.boofcv.swing)
 
     // CameraX core library using the camera2 implementation
     val camerax_version = "1.5.0-beta01"
@@ -87,4 +88,7 @@ dependencies {
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-statistics-distribution
     implementation(libs.commons.statistics.distribution)
+
+    // https://mvnrepository.com/artifact/com.opencsv/opencsv
+    implementation(libs.opencsv)
 }

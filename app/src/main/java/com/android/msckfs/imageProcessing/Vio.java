@@ -8,7 +8,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
-import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -31,6 +30,7 @@ import com.android.msckfs.imuProcessing.ImuProcessor;
 import com.android.msckfs.msckfs.Fmsckf;
 import com.android.msckfs.msckfs.Msckf;
 import com.android.msckfs.msckfs.Odometry;
+import com.android.msckfs.utils.AndroidFileWriter;
 import com.android.msckfs.utils.Isometry3D;
 
 import org.ddogleg.struct.DogArray_I8;
@@ -39,6 +39,7 @@ import org.ejml.simple.SimpleMatrix;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -61,11 +62,11 @@ import boofcv.struct.image.GrayU8;
 import georegression.struct.point.Point2D_F64;
 
 /**
- * Source code based on:
+ * References:
  *  - <a href="https://github.com/lessthanoptimal/BoofAndroidDemo">...</a>
  *  - <a href="https://developer.android.com/codelabs/camerax-getting-started">...</a>
  *  - <a href="https://github.com/lessthanoptimal/AndroidAutoFocus/blob/master/app/src/main/java/boofcv/androidautofocus/MainActivity.java">...</a>
- *  - https://android-review.googlesource.com/c/platform/frameworks/support/+/2797834/9/camera/integration-tests/viewtestapp/src/main/java/androidx/camera/integration/view/OverlayFragment.kt#90
+ *  - <a href="https://android-review.googlesource.com/c/platform/frameworks/support/+/2797834/9/camera/integration-tests/viewtestapp/src/main/java/androidx/camera/integration/view/OverlayFragment.kt#90">...</a>
  */
 public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
 
@@ -88,6 +89,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
     private static final int respawnThreshold = 8; // based on f_Min Parameter in FMSCKF
     private static final int maxFeatures = 50; // 350
 
+    private final List<Odometry> odometries = new LinkedList<>();
 
     private final Msckf msckf = new Fmsckf();
 
@@ -242,8 +244,15 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             synchronized (this.odom) {
                 this.odom.setTo(latestOdom);
             }
-            Log.i(TAG, latestOdom.pose.toString());
+            //Log.i(TAG, latestOdom.pose.toString());
+            if (odometries.size() > 16) {
+                Log.i(TAG, "write to file...");
+                // TODO: AndroidFileWriter.write(odometries);
+                odometries.clear();
+            }
+            odometries.add(latestOdom);
         }
+
 
         if (active.size() < respawnThreshold ) {
             tracker.spawnTracks();
@@ -280,8 +289,8 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             for (int color : colors) {
                 Paint paint = new Paint();
                 paint.setColor(color);
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(8);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setStrokeWidth(2);
                 paints.add(paint);
             }
 
@@ -381,9 +390,9 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
             // Clear canvas
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.MULTIPLY);
 
-            drawFeatures(canvas);
-            //drawOrientation(canvas);
-            //drawPosition(canvas);
+            //drawFeatures(canvas);
+            drawOrientation(canvas);
+            drawPosition(canvas);
 
 
 
@@ -416,5 +425,6 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         handlerThread.quitSafely();
         cameraExecutor.shutdown();
         imuProcessor.stop();
+
     }
 }
