@@ -1,4 +1,4 @@
-package com.android.msckfs.utils;
+package com.msckf.lib.utils;
 
 import java.util.HashMap;
 import java.util.Map;

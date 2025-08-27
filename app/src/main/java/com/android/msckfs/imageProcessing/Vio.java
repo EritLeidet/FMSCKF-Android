@@ -30,7 +30,6 @@ import com.android.msckfs.imuProcessing.ImuProcessor;
 import com.android.msckfs.msckfs.Fmsckf;
 import com.android.msckfs.msckfs.Msckf;
 import com.android.msckfs.msckfs.Odometry;
-import com.android.msckfs.utils.AndroidFileWriter;
 import com.android.msckfs.utils.Isometry3D;
 
 import org.ddogleg.struct.DogArray_I8;

@@ -1,16 +1,6 @@
-package com.android.msckfs.msckfs;
-import static com.android.msckfs.utils.MathUtils.deleteColumns;
-import static com.android.msckfs.utils.MathUtils.deleteRows;
-import static com.android.msckfs.utils.MathUtils.fromTwoVectors;
-import static com.android.msckfs.utils.MathUtils.quaternionMultiplication;
-import static com.android.msckfs.utils.MathUtils.quaternionNormalize;
-import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
-import static com.android.msckfs.utils.MathUtils.rotationToQuaternion;
-import static com.android.msckfs.utils.MathUtils.skewSymmetric;
-import static com.android.msckfs.utils.MathUtils.smallAngleQuaternion;
+package com.msckf.lib.msckfs;
+import static com.msckf.lib.utils.MathUtils.*;
 import static org.ejml.dense.row.CommonOps_DDRM.add;
-import static org.ejml.dense.row.CommonOps_DDRM.divide;
-import static org.ejml.dense.row.CommonOps_DDRM.identity;
 import static org.ejml.dense.row.CommonOps_DDRM.insert;
 import static org.ejml.dense.row.CommonOps_DDRM.mult;
 import static org.ejml.dense.row.CommonOps_DDRM.scale;
@@ -20,17 +10,13 @@ import static org.ejml.dense.row.CommonOps_DDRM.transpose;
 import static java.lang.Math.cos;
 import static java.lang.Math.pow;
 import static java.lang.Math.sin;
-import static java.lang.Thread.sleep;
 
-import android.util.Log;
-
-import com.android.msckfs.imageProcessing.FeatureMessage;
-import com.android.msckfs.imuProcessing.ImuMessage;
-import com.android.msckfs.imageProcessing.FeatureMeasurement;
-import com.android.msckfs.utils.Isometry3D;
+import com.msckf.lib.imageProcessing.FeatureMeasurement;
+import com.msckf.lib.imageProcessing.FeatureMessage;
+import com.msckf.lib.imuProcessing.ImuMessage;
+import com.msckf.lib.utils.Isometry3D;
 
 import org.apache.commons.statistics.distribution.ChiSquaredDistribution;
-import org.ejml.MatrixDimensionException;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.data.DMatrixSparseCSC;
 import org.ejml.dense.row.linsol.chol.LinearSolverCholLDL_DDRM;
@@ -386,25 +372,25 @@ public class Msckf {
         // that are received before the image msg.
         time = System.nanoTime();
         batchImuProcessing(featureMsg.time);
-        Log.i(TAG, "---batchImuProcessing:      " + (System.nanoTime() - time));
+        // Log.i(TAG, "---batchImuProcessing:      " + (System.nanoTime() - time));
 
         /*
         // Augment the state vector.
         time = System.nanoTime();
         stateAugmentation(featureMsg.time);
-        Log.i(TAG, "---stateAugmentation:       " + (System.nanoTime() - time));
+        // Log.i(TAG, "---stateAugmentation:       " + (System.nanoTime() - time));
 
         // Add new observations for existing features or new features
         // in the map server.
         time = System.nanoTime();
         addFeatureObservations(featureMsg);
-        Log.i(TAG, "---addFeatureObservations:  " + (System.nanoTime() - time));
+        // Log.i(TAG, "---addFeatureObservations:  " + (System.nanoTime() - time));
 
 
         // Prune camera states.
         time = System.nanoTime();
         removeOldCamStates();
-        Log.i(TAG, "---removeOldCamStates:      " + (System.nanoTime() - time));
+        // Log.i(TAG, "---removeOldCamStates:      " + (System.nanoTime() - time));
 
 
         boolean fmsckf = fmsckfUpdate();
@@ -414,7 +400,7 @@ public class Msckf {
         if (!fmsckf) {
             time = System.nanoTime();
             removeLostFeatures();
-            Log.i(TAG, "---removeLostFeatures:      " + (System.nanoTime() - time));
+            // Log.i(TAG, "---removeLostFeatures:      " + (System.nanoTime() - time));
 
         }
         

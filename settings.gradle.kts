@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MSCKFsAutomaticPort"
 include(":app")
- 
+include(":lib")

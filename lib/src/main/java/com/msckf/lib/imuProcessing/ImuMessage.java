@@ -1,4 +1,4 @@
-package com.android.msckfs.imuProcessing;
+package com.msckf.lib.imuProcessing;
 
 import static com.android.msckfs.utils.MathUtils.NANOSECOND_TO_SECOND;
 

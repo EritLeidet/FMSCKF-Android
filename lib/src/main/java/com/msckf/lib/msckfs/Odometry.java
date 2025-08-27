@@ -1,8 +1,7 @@
-package com.android.msckfs.msckfs;
+package com.msckf.lib.msckfs;
 
-import androidx.annotation.NonNull;
 
-import com.android.msckfs.utils.Isometry3D;
+import com.msckf.lib.utils.Isometry3D;
 
 import org.ejml.simple.SimpleMatrix;
 

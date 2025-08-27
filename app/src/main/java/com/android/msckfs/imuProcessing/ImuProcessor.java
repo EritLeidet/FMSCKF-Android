@@ -10,7 +10,6 @@ import android.util.Log;
 import com.android.msckfs.msckfs.Msckf;
 
 import java.util.Arrays;
-import java.util.function.Consumer;
 
 public class ImuProcessor implements SensorEventListener {
 

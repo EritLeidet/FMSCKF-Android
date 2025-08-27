@@ -1,4 +1,4 @@
-package com.android.msckfs.msckfs;
+package com.msckf.lib.msckfs;
 
 import org.ejml.simple.SimpleMatrix;
 

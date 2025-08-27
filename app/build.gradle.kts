@@ -79,15 +79,14 @@ dependencies {
     // https://mvnrepository.com/artifact/org.ojalgo/ojalgo
     // implementation(libs.ojalgo)
     // https://mvnrepository.com/artifact/org.ejml/ejml-core
-    implementation("org.ejml:ejml-core:0.44.0")
+    implementation(libs.ejml.core)
 
-    // implementation(libs.commons.geometry.euclidean) // Quaternionsä
+    // implementation(libs.commons.geometry.euclidean) // Quaternions
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-collections4
     implementation(libs.commons.collections4)
 
-    // https://mvnrepository.com/artifact/org.apache.commons/commons-statistics-distribution
-    implementation(libs.commons.statistics.distribution)
+
 
     // https://mvnrepository.com/artifact/com.opencsv/opencsv
     implementation(libs.opencsv)

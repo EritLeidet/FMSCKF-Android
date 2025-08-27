@@ -1,4 +1,4 @@
-package com.android.msckfs.msckfs;
+package com.msckf.lib.msckfs;
 
 import static com.android.msckfs.utils.MathUtils.NANOSECOND_TO_SECOND;
 

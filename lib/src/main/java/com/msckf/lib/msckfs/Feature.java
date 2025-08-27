@@ -1,4 +1,4 @@
-package com.android.msckfs.msckfs;
+package com.msckf.lib.msckfs;
 
 import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
 
@@ -59,7 +59,7 @@ public class Feature {
     @SuppressWarnings({"ConstantConditions", "BooleanMethodIsAlwaysInverted"}) // suppress false null pointer warnings
     public boolean checkMotion(Map<Integer, CamState> camStates) {
         if (observations.size() < 2) {
-            Log.d(TAG, "removeOldCamStates: checkMotion failed. observations.size() < 2");
+            // Log.d(TAG, "removeOldCamStates: checkMotion failed. observations.size() < 2");
             return false;
         }
 

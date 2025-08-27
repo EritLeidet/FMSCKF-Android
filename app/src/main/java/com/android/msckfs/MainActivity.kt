@@ -3,11 +3,8 @@ package com.android.msckfs
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import com.android.msckfs.imuProcessing.ImuMessage
 import com.android.msckfs.imuProcessing.ImuProcessor
-import com.android.msckfs.msckfs.Msckf
-import java.util.function.Consumer
+import com.msckf.lib.msckfs.Msckf
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,7 +16,7 @@ class MainActivity : AppCompatActivity() {
 
         // VIO
         // TODO: coroutines?
-        val msckf = Msckf()
+        val msckf = com.msckf.lib.msckfs.Msckf()
         //val callback = { msg : ImuMessage -> msckf.imuCallback(msg) } // TODO: https://www.baeldung.com/kotlin/lambda-expressions
         imuProcessor = ImuProcessor(applicationContext, msckf)
         /*

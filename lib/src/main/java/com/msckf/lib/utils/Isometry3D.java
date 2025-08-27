@@ -1,4 +1,4 @@
-package com.android.msckfs.utils;
+package com.msckf.lib.utils;
 
 import static org.ejml.dense.row.CommonOps_DDRM.identity;
 import static org.ejml.dense.row.CommonOps_DDRM.insert;

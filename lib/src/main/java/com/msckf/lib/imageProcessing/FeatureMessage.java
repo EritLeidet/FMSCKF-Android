@@ -1,6 +1,7 @@
-package com.android.msckfs.imageProcessing;
+package com.msckf.lib.imageProcessing;
 
-import com.android.msckfs.utils.MathUtils;
+
+import com.msckf.lib.utils.MathUtils;
 
 import java.util.List;
 

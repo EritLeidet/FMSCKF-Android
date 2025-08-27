@@ -1,13 +1,13 @@
-package com.android.msckfs.utils;
+package com.msckf.lib.utils;
 
 
 import static org.ejml.dense.row.NormOps_DDRM.normF;
 import static java.lang.Math.sqrt;
 
-import android.util.Log;
 
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.dense.row.CommonOps_DDRM;
+import org.ejml.dense.row.NormOps_DDRM;
 import org.ejml.simple.SimpleMatrix;
 
 import java.util.ArrayList;
@@ -158,7 +158,7 @@ public class MathUtils {
     }
 
     public static void quaternionNormalize(DMatrixRMaj q) {
-        CommonOps_DDRM.divide(q, normF(q));
+        CommonOps_DDRM.divide(q, NormOps_DDRM.normF(q));
     }
 
     /**
@@ -228,7 +228,6 @@ public class MathUtils {
     }
 
     public static SimpleMatrix quaternionToPoint(SimpleMatrix q) {
-        Log.d("MathUtils", q.toString());
         return quaternionToRotation(q).mult(new SimpleMatrix(new double[]{1,0,0}));
 
     }

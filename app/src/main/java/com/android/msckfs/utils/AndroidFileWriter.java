@@ -1,16 +1,13 @@
 package com.android.msckfs.utils;
 
-import android.app.PendingIntent;
 import android.content.Context;
 import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.Log;
 
 import com.android.msckfs.msckfs.Odometry;
 import com.opencsv.CSVWriter;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.android.msckfs.imageProcessing;
+package com.msckf.lib.imageProcessing;
 
 public class FeatureMeasurement {
     public final long id;
