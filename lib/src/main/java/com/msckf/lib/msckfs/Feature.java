@@ -1,7 +1,6 @@
 package com.msckf.lib.msckfs;
 
-import static com.android.msckfs.utils.MathUtils.quaternionToRotation;
-
+import static com.msckf.lib.utils.MathUtils.quaternionToRotation;
 import static org.ejml.dense.row.CommonOps_DDRM.add;
 import static org.ejml.dense.row.CommonOps_DDRM.elementMult;
 import static org.ejml.dense.row.CommonOps_DDRM.elementSum;
@@ -12,10 +11,9 @@ import static org.ejml.dense.row.CommonOps_DDRM.subtract;
 import static java.lang.Double.max;
 import static java.lang.Double.min;
 
-import android.util.Log;
 
-import com.android.msckfs.utils.Isometry3D;
-import com.android.msckfs.utils.MathUtils;
+import com.msckf.lib.utils.Isometry3D;
+import com.msckf.lib.utils.MathUtils;
 
 import org.apache.commons.collections4.map.LinkedMap;
 import org.ejml.data.DMatrixRMaj;

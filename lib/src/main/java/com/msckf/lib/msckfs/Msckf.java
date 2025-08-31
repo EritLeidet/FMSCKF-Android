@@ -94,7 +94,7 @@ public class Msckf {
         ImuState.GRAVITY = Config.GRAVITY;
 
         // Transformation between the IMU and the camera
-        SimpleMatrix tCamImu = Config.tImuCam.invert();
+        SimpleMatrix tCamImu = Config.tImuCam.invert(); // TODO: get tCamImu from Config instead of tImuCam.
         stateServer.imuState.rImuCam = tCamImu.extractMatrix(0,3,0,3).transpose();
         stateServer.imuState.tCamImu = tCamImu.extractMatrix(0,3,3,SimpleMatrix.END);
 

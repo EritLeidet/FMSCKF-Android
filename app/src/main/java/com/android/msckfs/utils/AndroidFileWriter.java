@@ -4,7 +4,7 @@ import android.content.Context;
 import android.os.Environment;
 import android.util.Log;
 
-import com.android.msckfs.msckfs.Odometry;
+import com.msckf.lib.msckfs.Odometry;
 import com.opencsv.CSVWriter;
 
 import java.io.File;

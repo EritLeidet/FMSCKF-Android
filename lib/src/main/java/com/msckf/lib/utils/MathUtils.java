@@ -1,7 +1,5 @@
 package com.msckf.lib.utils;
 
-
-import static org.ejml.dense.row.NormOps_DDRM.normF;
 import static java.lang.Math.sqrt;
 
 

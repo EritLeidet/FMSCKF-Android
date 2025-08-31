@@ -27,10 +27,12 @@ import androidx.camera.effects.OverlayEffect;
 import androidx.core.util.Consumer;
 
 import com.android.msckfs.imuProcessing.ImuProcessor;
-import com.android.msckfs.msckfs.Fmsckf;
-import com.android.msckfs.msckfs.Msckf;
-import com.android.msckfs.msckfs.Odometry;
-import com.android.msckfs.utils.Isometry3D;
+import com.msckf.lib.imageProcessing.FeatureMeasurement;
+import com.msckf.lib.imageProcessing.FeatureMessage;
+import com.msckf.lib.msckfs.Fmsckf;
+import com.msckf.lib.msckfs.Msckf;
+import com.msckf.lib.msckfs.Odometry;
+import com.msckf.lib.utils.Isometry3D;
 
 import org.ddogleg.struct.DogArray_I8;
 import org.ejml.data.FMatrixRMaj;
@@ -54,6 +56,7 @@ import boofcv.alg.distort.brown.LensDistortionBrown;
 import boofcv.alg.tracker.klt.ConfigPKlt;
 import boofcv.android.ConvertBitmap;
 import boofcv.factory.tracker.FactoryPointTracker;
+import boofcv.struct.calib.CameraPinhole;
 import boofcv.struct.calib.CameraPinholeBrown;
 import boofcv.struct.distort.Point2Transform2_F64;
 import boofcv.struct.image.GrayS16;
@@ -126,6 +129,7 @@ public class Vio extends CameraActivity implements ImageAnalysis.Analyzer {
         CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics("0"); // TODO: determine cameraID
         float[] lensIntrinsics = cameraCharacteristics.get(LENS_INTRINSIC_CALIBRATION);
         float[] distortionParams = cameraCharacteristics.get(LENS_DISTORTION);
+        new CameraPinhole();
         CameraPinholeBrown cameraModel = new CameraPinholeBrown(
                 lensIntrinsics[0], // fx
                 lensIntrinsics[1], // fy

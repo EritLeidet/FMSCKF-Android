@@ -7,7 +7,9 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.util.Log;
 
-import com.android.msckfs.msckfs.Msckf;
+
+import com.msckf.lib.imuProcessing.ImuMessage;
+import com.msckf.lib.msckfs.Msckf;
 
 import java.util.Arrays;
 

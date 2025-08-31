@@ -1,6 +1,7 @@
 package com.android.msckfs;
 
-import com.android.msckfs.msckfs.Msckf;
+
+import com.msckf.lib.msckfs.Msckf;
 
 import org.ejml.simple.SimpleMatrix;
 import org.junit.Test;

@@ -39,6 +39,11 @@ android {
         viewBinding = true
     }
 
+    // TODO: fix :app:mergeDebugJavaResource issue.
+    packaging {
+        //resources.pickFirsts.add("org/jdesktop/swingx/**")
+    }
+
 }
 
 dependencies {
@@ -48,6 +53,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+    implementation(project(":lib"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -83,8 +89,7 @@ dependencies {
 
     // implementation(libs.commons.geometry.euclidean) // Quaternions
 
-    // https://mvnrepository.com/artifact/org.apache.commons/commons-collections4
-    implementation(libs.commons.collections4)
+
 
 
 

@@ -10,9 +10,14 @@ public class FeatureMessage {
     public final double time; // unix time
     public final List<FeatureMeasurement> features; // TODO: type FeatureMeasurement
 
-    public FeatureMessage(long timestamp, List<FeatureMeasurement> features) {
+    public FeatureMessage(double time, List<FeatureMeasurement> features) {
         this.features = features;
-        this.time = timestamp * MathUtils.NANOSECOND_TO_SECOND;
+        this.time = time;
+
+    }
+
+    public FeatureMessage(long timestamp, List<FeatureMeasurement> features) {
+        this(timestamp * MathUtils.NANOSECOND_TO_SECOND, features);
 
     }
 }

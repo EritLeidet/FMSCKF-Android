@@ -7,7 +7,7 @@ import org.ejml.simple.SimpleMatrix;
 
 public class Odometry {
 
-    public double timestamp;
+    public double time;
 
     public Isometry3D pose; // Body pose. Usually equal to IMU pose.
 
@@ -16,14 +16,14 @@ public class Odometry {
     public Isometry3D camPose;
 
     public void setTo(Odometry odom) {
-        this.timestamp = odom.timestamp;
+        this.time = odom.time;
         this.pose = odom.pose;
         this.bodyVelocity = odom.bodyVelocity;
         this.camPose = odom.camPose;
     }
 
     public Odometry(double timestamp, Isometry3D pose, SimpleMatrix bodyVelocity, Isometry3D camPose) {
-        this.timestamp = timestamp;
+        this.time = timestamp;
         this.pose = pose;
         this.bodyVelocity = bodyVelocity;
         this.camPose = camPose;
@@ -32,7 +32,7 @@ public class Odometry {
     @Override
     public String toString() {
         return "Odometry{" +
-                "timestamp=" + timestamp +
+                "timestamp=" + time +
                 ", pose=" + pose +
                 ", bodyVelocity=" + bodyVelocity +
                 ", camPose=" + camPose +
@@ -49,7 +49,7 @@ public class Odometry {
     }
     public String[] toStringArray() {
         return new String[]{
-                String.valueOf(timestamp),
+                String.valueOf(time),
                 String.valueOf(pose.t.get(0)),
                 String.valueOf(pose.t.get(1)),
                 String.valueOf(pose.t.get(2))
