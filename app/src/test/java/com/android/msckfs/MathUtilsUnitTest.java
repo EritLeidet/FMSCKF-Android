@@ -1,7 +1,8 @@
 package com.android.msckfs;
 
-import static com.android.msckfs.utils.MathUtils.deleteColumns;
-import static com.android.msckfs.utils.MathUtils.deleteRows;
+
+import static com.msckf.lib.utils.MathUtils.deleteColumns;
+import static com.msckf.lib.utils.MathUtils.deleteRows;
 
 import org.ejml.EjmlUnitTests;
 import org.ejml.simple.SimpleMatrix;

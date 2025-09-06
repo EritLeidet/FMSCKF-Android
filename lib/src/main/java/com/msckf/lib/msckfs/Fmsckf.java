@@ -8,6 +8,14 @@ import java.util.List;
 // TODO: quote FMSCKF paper
 public class Fmsckf extends Msckf {
 
+    public Fmsckf() {
+        super();
+    }
+
+    public Fmsckf(MsckfExternalConfig externalConfig) {
+        super(externalConfig);
+    }
+
     @Override
     public boolean fmsckfUpdate() {
         if (stateServer.mapServer.size() >= Config.MIN_TRACKED_FEATURES) return false;

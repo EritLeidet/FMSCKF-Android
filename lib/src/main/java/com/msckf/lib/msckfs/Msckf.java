@@ -66,16 +66,19 @@ public class Msckf {
     private final Map<Integer,Double> chiSquaredTestTable = new HashMap<>();
 
     public Msckf() {
-        assert(!denseSolver.modifiesB());
+        this(new MsckfExternalConfig());
+    }
+
+    public Msckf(MsckfExternalConfig externalConfig) {
 
         F = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,StateInfo.IMU_STATE_SIZE);
         G = new DMatrixRMaj(StateInfo.IMU_STATE_SIZE,12); // 12, not 21.
 
         SimpleMatrix continuousNoiseCov = new SimpleMatrix(12,12);
-        continuousNoiseCov.insertIntoThis(0,0, SimpleMatrix.identity(3).scale(Config.GYRO_NOISE));
-        continuousNoiseCov.insertIntoThis(3,3, SimpleMatrix.identity(3).scale(Config.GYRO_BIAS_NOISE));
-        continuousNoiseCov.insertIntoThis(6,6, SimpleMatrix.identity(3).scale(Config.ACC_NOISE));
-        continuousNoiseCov.insertIntoThis(9,9, SimpleMatrix.identity(3).scale(Config.ACC_BIAS_NOISE));
+        continuousNoiseCov.insertIntoThis(0,0, SimpleMatrix.identity(3).scale(externalConfig.gyroNoise));
+        continuousNoiseCov.insertIntoThis(3,3, SimpleMatrix.identity(3).scale(externalConfig.gyroBiasNoise));
+        continuousNoiseCov.insertIntoThis(6,6, SimpleMatrix.identity(3).scale(externalConfig.accNoise));
+        continuousNoiseCov.insertIntoThis(9,9, SimpleMatrix.identity(3).scale(externalConfig.accBiasNoise));
         SimpleMatrix stateCov = new SimpleMatrix(StateInfo.IMU_STATE_SIZE, StateInfo.IMU_STATE_SIZE);
         this.stateServer = new StateServer(stateCov, continuousNoiseCov);
 
@@ -87,21 +90,20 @@ public class Msckf {
 
         }
 
-        stateServer.imuState.velocity = Config.velocity;
+        stateServer.imuState.velocity = InternalConfig.velocity;
         resetStateCov();
 
         // Gravity vector in the world frame
-        ImuState.GRAVITY = Config.GRAVITY;
+        ImuState.GRAVITY = InternalConfig.GRAVITY;
 
         // Transformation between the IMU and the camera
-        SimpleMatrix tCamImu = Config.tImuCam.invert(); // TODO: get tCamImu from Config instead of tImuCam.
-        stateServer.imuState.rImuCam = tCamImu.extractMatrix(0,3,0,3).transpose();
-        stateServer.imuState.tCamImu = tCamImu.extractMatrix(0,3,3,SimpleMatrix.END);
+        stateServer.imuState.rImuCam = externalConfig.tCamImu.R.transpose();
+        stateServer.imuState.tCamImu = externalConfig.tCamImu.t;
 
         // Extrinsic parameters of camera and IMU
         ImuState.tImuBody = new Isometry3D(
-                Config.tImuBody.extractMatrix(0,3,0,3).transpose(),
-                Config.tImuBody.extractMatrix(0,3,3,SimpleMatrix.END));
+                InternalConfig.tImuBody.extractMatrix(0,3,0,3).transpose(),
+                InternalConfig.tImuBody.extractMatrix(0,3,3,SimpleMatrix.END));
 
 
     }
@@ -109,11 +111,11 @@ public class Msckf {
     public void resetStateCov() {
         SimpleMatrix stateCov = new SimpleMatrix(StateInfo.IMU_STATE_SIZE, StateInfo.IMU_STATE_SIZE);
         SimpleMatrix identity = SimpleMatrix.identity(3);
-        stateCov.insertIntoThis(3,3, identity.scale(Config.GYRO_BIAS_COV));
-        stateCov.insertIntoThis(6,6, identity.scale(Config.VELOCITY_COV));
-        stateCov.insertIntoThis(9,9, identity.scale(Config.ACC_BIAS_COV));
-        stateCov.insertIntoThis(15,15, identity.scale(Config.EXTRINSIC_ROTATION_COV));
-        stateCov.insertIntoThis(18,18, identity.scale(Config.EXTRINSIC_TRANSLATION_COV));
+        stateCov.insertIntoThis(3,3, identity.scale(InternalConfig.GYRO_BIAS_COV));
+        stateCov.insertIntoThis(6,6, identity.scale(InternalConfig.VELOCITY_COV));
+        stateCov.insertIntoThis(9,9, identity.scale(InternalConfig.ACC_BIAS_COV));
+        stateCov.insertIntoThis(15,15, identity.scale(InternalConfig.EXTRINSIC_ROTATION_COV));
+        stateCov.insertIntoThis(18,18, identity.scale(InternalConfig.EXTRINSIC_TRANSLATION_COV));
         stateServer.stateCov = stateCov;
 
     }
@@ -175,20 +177,11 @@ public class Msckf {
     }
 
 
-    private static class Config {
+    private static class InternalConfig {
         static final double GRAVITY_ACC = 9.81f;
         static final SimpleMatrix GRAVITY = new SimpleMatrix(new double[] {0.0,0.0,-GRAVITY_ACC});
         static final int MAX_CAM_STATES = 20;
 
-        // Noise related parameters (Use variance instead of standard deviation)
-
-        // TODO: undo my changes to the noise
-
-        static final int more = 1;
-        static final double GYRO_NOISE = pow(0.005, 2) * more;
-        static final double ACC_NOISE = pow(0.05,2) * more;
-        static final double GYRO_BIAS_NOISE = pow(0.001,2) * more;
-        static final double ACC_BIAS_NOISE = pow(0.01,2) * more;
         static final double OBSERVATION_NOISE = pow(0.035,2);
 
         // Initial state
@@ -196,18 +189,21 @@ public class Msckf {
 
         // The initial covariance of orientation and position can be
         // set to 0. But for velocity, bias and extrinsic parameters,
-        // there should be nontrivial uncertainty
-        static final double VELOCITY_COV = 0.25 * more;
-        static final double GYRO_BIAS_COV = 0.01 * more;
-        static final double ACC_BIAS_COV = 0.01 * more;
-        static final double EXTRINSIC_ROTATION_COV = 3.0462e-4 * more;
-        static final double EXTRINSIC_TRANSLATION_COV = 2.5e-5 * more;
+        // there should be nontrivial uncertainty // TODO: should I change?
+        static final double VELOCITY_COV = 0.25;
+        static final double GYRO_BIAS_COV = 0.01;
+        static final double ACC_BIAS_COV = 0.01;
+        static final double EXTRINSIC_ROTATION_COV = 3.0462e-4;
+        static final double EXTRINSIC_TRANSLATION_COV = 2.5e-5;
 
 
         // calibration parameters
         // T_imu_cam: takes a vector from the IMU frame to the cam frame.
+        /*
         static final SimpleMatrix tImuCam = SimpleMatrix.identity(4); // TODO:  what are these for my phone? How to find out? See paper.
 
+
+         */
         static final SimpleMatrix tImuBody = SimpleMatrix.identity(4);
 
     }
@@ -461,7 +457,7 @@ public class Msckf {
      * Basic sliding window which removes the oldest camera states from our state vector.
      */
     private void removeOldCamStates() {
-        if (stateServer.camStates.size() < Config.MAX_CAM_STATES) return;
+        if (stateServer.camStates.size() < InternalConfig.MAX_CAM_STATES) return;
         // Find two camera states to be removed. Here we choose the oldest two.
         List<Integer> rmCamStateIds = new ArrayList<>(2);
         rmCamStateIds.add(stateServer.camStates.get(0));
@@ -658,7 +654,7 @@ public class Msckf {
     @SuppressWarnings("ConstantConditions") // suppress unwanted null pointer warnings
     protected boolean gatingTest(SimpleMatrix H, SimpleMatrix r, int dof) {
         DMatrixRMaj P1 = H.mult(stateServer.stateCov).mult(H.transpose()).getDDRM();
-        DMatrixRMaj P2 = SimpleMatrix.identity(H.getNumRows()).scale(Config.OBSERVATION_NOISE).getDDRM();
+        DMatrixRMaj P2 = SimpleMatrix.identity(H.getNumRows()).scale(InternalConfig.OBSERVATION_NOISE).getDDRM();
         add(P1,P2,A);
 
         // Solve linear system
@@ -806,7 +802,7 @@ public class Msckf {
         // S
         SimpleMatrix S = SimpleMatrix
                 .identity(Hthin.getNumRows())
-                .scale(Config.OBSERVATION_NOISE)
+                .scale(InternalConfig.OBSERVATION_NOISE)
                 .plus(
                         Hthin.mult(P).mult(Hthin.transpose())
                 );

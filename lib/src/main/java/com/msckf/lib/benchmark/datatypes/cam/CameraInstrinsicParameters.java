@@ -1,4 +1,4 @@
-package com.msckf.lib.benchmark;
+package com.msckf.lib.benchmark.datatypes.cam;
 
 public class CameraInstrinsicParameters {
     float[] camera; // fx fy cx cy

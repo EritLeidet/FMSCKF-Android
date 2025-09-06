@@ -2,29 +2,38 @@ package com.msckf.lib.benchmark;
 
 
 import static com.msckf.lib.utils.MathUtils.quaternionToRotation;
+import static com.msckf.lib.utils.MathUtils.toDoubleArray;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.msckf.lib.imageProcessing.CameraConfig;
+import com.msckf.lib.benchmark.datatypes.cam.BenchmarkCameraConfig;
+import com.msckf.lib.benchmark.datatypes.cam.CameraInstrinsicParameters;
+import com.msckf.lib.benchmark.datatypes.imu.BenchmarkImuConfig;
+import com.msckf.lib.benchmark.datatypes.imu.DiscreteNoiseParameters;
 import com.msckf.lib.imageProcessing.FeatureMessage;
 import com.msckf.lib.imageProcessing.FeatureTracker;
 import com.msckf.lib.imageProcessing.ImageMessage;
 import com.msckf.lib.imuProcessing.ImuMessage;
 import com.msckf.lib.msckfs.Fmsckf;
 import com.msckf.lib.msckfs.Msckf;
+import com.msckf.lib.msckfs.MsckfExternalConfig;
 import com.msckf.lib.msckfs.Odometry;
 import com.msckf.lib.utils.Isometry3D;
 import com.opencsv.CSVReader;
+import com.opencsv.CSVWriter;
 import com.opencsv.exceptions.CsvValidationException;
 
+import org.ejml.data.DMatrixRMaj;
 import org.ejml.simple.SimpleMatrix;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -32,10 +41,8 @@ import org.yaml.snakeyaml.constructor.Constructor;
 
 import boofcv.alg.distort.LensDistortionNarrowFOV;
 import boofcv.alg.distort.brown.LensDistortionBrown;
-import boofcv.alg.distort.pinhole.LensDistortionPinhole;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.io.image.UtilImageIO;
-import boofcv.struct.calib.CameraPinhole;
 import boofcv.struct.calib.CameraPinholeBrown;
 import boofcv.struct.image.GrayU8;
 
@@ -79,20 +86,18 @@ public class Dataset {
         List<Odometry> groundTruth = new ArrayList<>();
         reader.readNext();
         while ( (nextRecord = reader.readNext()) != null) {
-            // Convert quaternion Hamilton Convention (used in benchmark) to JPL convention (used in MSCKF).
-            // TODO: muss ich dafür nicht quaternionConjugate verwenden???? Es reicht doch nicht, nur die Reihenfolge von [w x y z] zu ändern
-            SimpleMatrix quaternion = new SimpleMatrix(new double[]{ // TODO: was ist das Quaternion-Format in ground truth?
-                    Double.parseDouble(nextRecord[5]),
-                    Double.parseDouble(nextRecord[6]),
-                    Double.parseDouble(nextRecord[7]),
+            SimpleMatrix jplQuaternion = new SimpleMatrix(new double[]{
+                    Double.parseDouble(nextRecord[1]),
+                    Double.parseDouble(nextRecord[2]),
+                    Double.parseDouble(nextRecord[3]),
                     Double.parseDouble(nextRecord[4])
             });
 
-            SimpleMatrix rotationMatrix = quaternionToRotation(quaternion);
+            SimpleMatrix rotationMatrix = quaternionToRotation(jplQuaternion);
             SimpleMatrix translation = new SimpleMatrix(new double[]{
-                    Double.parseDouble(nextRecord[1]),
-                    Double.parseDouble(nextRecord[2]),
-                    Double.parseDouble(nextRecord[3])
+                    Double.parseDouble(nextRecord[5]),
+                    Double.parseDouble(nextRecord[6]),
+                    Double.parseDouble(nextRecord[7])
             });
             Isometry3D pose = new Isometry3D(rotationMatrix, translation);
             groundTruth.add(new Odometry(Double.parseDouble(nextRecord[0]), pose, null, null));
@@ -138,17 +143,18 @@ public class Dataset {
      */
     public static BenchmarkCameraConfig loadCameraConfig(String datasetPath) throws FileNotFoundException {
 
-        InputStream inputStream = new FileInputStream(datasetPath + "/camera/sensor.yaml");
+        InputStream inputStream = new FileInputStream(datasetPath + "/camera/sensor.yaml"); // TODO: do you need to .close()?
         Yaml yaml = new Yaml(new Constructor(BenchmarkCameraConfig.class, new LoaderOptions()));
         // TODO: automatically remove two lines of imported file. (YAML-Version declaration)
         return yaml.load(inputStream);
 
+
     }
 
-    public static BenchmarkCameraConfig loadImuConfig(String datasetPath) throws FileNotFoundException {
+    public static BenchmarkImuConfig loadImuConfig(String datasetPath) throws FileNotFoundException {
 
         InputStream inputStream = new FileInputStream(datasetPath + "/imu/sensor.yaml");
-        Yaml yaml = new Yaml(new Constructor(BenchmarkCameraConfig.class, new LoaderOptions()));
+        Yaml yaml = new Yaml(new Constructor(BenchmarkImuConfig.class, new LoaderOptions()));
         // TODO: automatically remove two lines of imported file. (YAML-Version declaration)
         return yaml.load(inputStream);
 
@@ -178,19 +184,73 @@ public class Dataset {
         return new LensDistortionBrown(cameraModel);
     }
 
+    public static List<String[]> odometryAsTable(List<Odometry> odometries) {
+        List<String[]> table = new ArrayList<>(odometries.size());
+        for (Odometry o : odometries) {
+
+            String[] tableRow = new String[]{
+                    String.valueOf(o.time),             // t
+                    String.valueOf(o.pose.t.get(0)),    // pos.x
+                    String.valueOf(o.pose.t.get(1)),    // pos.y
+                    String.valueOf(o.pose.t.get(2)),    // pos.z
+
+            };
+            table.add(tableRow);
+        }
+        return table;
+    }
+
+    public static MsckfExternalConfig createMsckfConfig(BenchmarkCameraConfig cameraConfig, BenchmarkImuConfig imuConfig) {
+        // camera to body transform. (In benchmark body pose and imu pose are the synonymous.)
+        float[] rotationArray = cameraConfig.getExtrinsic().getQ();
+        float[] translationArray = cameraConfig.getExtrinsic().getP();
+        DMatrixRMaj rotationQuaternion = new DMatrixRMaj(toDoubleArray(rotationArray));
+        DMatrixRMaj rotationMatrix = quaternionToRotation(rotationQuaternion);
+        DMatrixRMaj translationMatrix = new DMatrixRMaj(toDoubleArray(translationArray));
+        Isometry3D camBody = new Isometry3D(SimpleMatrix.wrap(rotationMatrix), SimpleMatrix.wrap(translationMatrix));
+
+        // Noise related parameters.
+        // TODO: try out the possibility that the unit is [rad/s] is meant instead of [rad/s/hz]
+        DiscreteNoiseParameters noiseParameters = imuConfig.getIntrinsic();
+        double gyroNoise = noiseParameterToVariance(noiseParameters.getSigma_w(), imuConfig.getFrequency());
+        double gyroBiasNoise = noiseParameterToVariance(noiseParameters.getSigma_bw(), imuConfig.getFrequency());
+        double accNoise = noiseParameterToVariance(noiseParameters.getSigma_a(), imuConfig.getFrequency());
+        double accBiasNoise = noiseParameterToVariance(noiseParameters.getSigma_ba(), imuConfig.getFrequency());
+
+        return new MsckfExternalConfig(camBody, gyroNoise, gyroBiasNoise, accNoise, accBiasNoise);
+
+    }
+
+    /**
+     * Convert noise density or random walk to variance.
+     * @param sampleRate in units of hz
+     * References:
+     * - <a href="https://www.vectornav.com/resources/inertial-navigation-primer/examples/noise">...</a>
+     */
+    public static double noiseParameterToVariance(double noiseParameter, double sampleRate) {
+        return noiseParameter * noiseParameter * sampleRate;
+    }
+
+
+
+
 
     public static void main(String[] args) throws CsvValidationException, IOException {
+
 
         // Parse benchmark data.
         final String datasetPath = "C:/Users/Jessica/Downloads/huawei-mate50";
         List<ImageMessage> images = loadImages(datasetPath);
         List<ImuMessage> imuData = loadImuData(datasetPath);
         List<Odometry> groundTruth = loadGroundTruth(datasetPath);
-        BenchmarkCameraConfig benchmarkCameraConfig = loadCameraConfig(datasetPath);
-        LensDistortionNarrowFOV lensDistortion = buildLensDistortionModel(benchmarkCameraConfig, images.get(0).image.width, images.get(0).image.height);
+        BenchmarkCameraConfig cameraConfig = loadCameraConfig(datasetPath);
+        BenchmarkImuConfig imuConfig = loadImuConfig(datasetPath);
 
+        // Create configurations from benchmark data.
+        LensDistortionNarrowFOV lensDistortion = buildLensDistortionModel(cameraConfig, images.get(0).image.width, images.get(0).image.height);
+        MsckfExternalConfig msckfConfig = createMsckfConfig(cameraConfig, imuConfig);
         FeatureTracker featureTracker = new FeatureTracker(lensDistortion);
-        Msckf msckf = new Fmsckf();
+        Msckf msckf = new Fmsckf(msckfConfig); // TODO: add Config to Msckf
 
 
         // Visualize parsing results.
@@ -201,7 +261,8 @@ public class Dataset {
         int imuCounter = 0;
         int imageCounter = 0;
         List<Odometry> testResults = new LinkedList<>();
-        while (imuCounter < imuData.size() || imageCounter < images.size()) {
+        int cutoff = 2;
+        while ((imuCounter < imuData.size() || imageCounter < images.size()) && cutoff > 0) {
             // We know that the image and imu data is sorted by timestamp in ascending order.
             if (!imuData.isEmpty() && imuData.get(imuCounter).time < images.get(imageCounter).time) {
                 msckf.imuCallback(imuData.get(imuCounter));
@@ -209,12 +270,43 @@ public class Dataset {
             } else {
                 FeatureMessage featureMessage = featureTracker.trackFeatures(images.get(imageCounter));
                 Odometry odom = msckf.featureCallback(featureMessage);
-                testResults.add(odom);
+                if (odom != null) {
+                    testResults.add(odom);
+                    cutoff--;
+                }
                 imageCounter++;
             }
         }
+
+        if (testResults.isEmpty()) throw new AssertionError();
+
+        // Save results to file.
+        String exportPath = "C:/Users/Jessica/Downloads/";
+        CSVWriter writer = new CSVWriter(
+                new FileWriter(exportPath + "benchmarkResults.csv"),
+                ',',
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END);
+        List<String[]> resultTable = odometryAsTable(testResults);
+
+        System.out.println("TESTING?");
+        //System.out.println(Arrays.toString(resultTable.get(0)));
+        for (String[] row : resultTable) {
+            System.out.println(Arrays.toString(row));
+        }
+        if (resultTable.isEmpty()) throw new AssertionError();
+        try {
+            writer.writeAll(resultTable);
+        } finally {
+            writer.close();
+        }
+        ;
+
+
         // TODO: Orientierung visualisieren
         // TODO: Orientierung mit Ground Truth vergleichen.
+
 
     }
 }

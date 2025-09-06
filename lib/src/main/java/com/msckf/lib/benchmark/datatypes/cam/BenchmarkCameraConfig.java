@@ -1,4 +1,4 @@
-package com.msckf.lib.benchmark;
+package com.msckf.lib.benchmark.datatypes.cam;
 
 public class BenchmarkCameraConfig {
     String type;

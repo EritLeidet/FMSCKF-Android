@@ -24,6 +24,15 @@ public class MathUtils {
     public static final double NANOSECOND_TO_SECOND = 1e-9;
 
     // own work.
+    public static double[] toDoubleArray(float[] in) {
+        final double[] out = new double[in.length];
+        for (int i = 0; i < in.length; i++) {
+            out[i] = in[i];
+        }
+        return out;
+    }
+
+    // own work.
     public static DMatrixRMaj scale(double alpha, DMatrixRMaj m) {
         DMatrixRMaj out = new DMatrixRMaj();
         CommonOps_DDRM.scale(alpha, m, out);

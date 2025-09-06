@@ -1,6 +1,8 @@
-package com.msckf.lib.benchmark;
+package com.msckf.lib.benchmark.datatypes.cam;
 
 public class CameraExtrinsicParameters {
+
+    // camera to body transform
     float[] q; // x y z w
     float[] p; // [m]
     float t; // [s]
