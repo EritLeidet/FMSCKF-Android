@@ -41,7 +41,7 @@ android {
 
     // TODO: fix :app:mergeDebugJavaResource issue.
     packaging {
-        //resources.pickFirsts.add("org/jdesktop/swingx/**")
+        //resources.excludes("org/jdesktop/swingx/**")
     }
 
 }
@@ -89,10 +89,10 @@ dependencies {
 
     // implementation(libs.commons.geometry.euclidean) // Quaternions
 
-
-
-
-
     // https://mvnrepository.com/artifact/com.opencsv/opencsv
     implementation(libs.opencsv)
+
+    // https://mvnrepository.com/artifact/io.github.vincenzopalazzo/material-ui-swing
+    // ui dependency solves mergeDebugJavaResource
+    implementation("io.github.vincenzopalazzo:material-ui-swing:1.1.2-rc1")
 }
